@@ -19,3 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Attribution / 来源说明
+
+This project (AI-Montage-Plus) is a derivative work ("二次开发") of
+**ai-montage-agent** by **zhangzhanglaila**
+(https://github.com/zhangzhanglaila/ai-montage-agent), which is licensed
+under the MIT License. The original copyright notice above is preserved.
+
+本项目（AI-Montage-Plus）是基于 zhangzhanglaila 的开源项目 ai-montage-agent
+进行的二次开发，原项目同样采用 MIT 许可证，原始版权声明予以保留。

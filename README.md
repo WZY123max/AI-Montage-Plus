@@ -1,16 +1,26 @@
-# AI Montage Agent
+# AI Montage Plus
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/FFmpeg-required-green?logo=ffmpeg&logoColor=white" alt="FFmpeg required">
   <img src="https://img.shields.io/badge/Beat--Sync-enabled-brightgreen" alt="Beat sync">
-  <img src="https://img.shields.io/badge/Black--Frame--Cleanup-enabled-brightgreen" alt="Black frame cleanup">
   <img src="https://img.shields.io/badge/WebUI-FastAPI-009688?logo=fastapi&logoColor=white" alt="WebUI FastAPI">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Fork%20of-ai--montage--agent-8b5cf6" alt="Fork of ai-montage-agent">
 </p>
 
-> **AI 自动影视混剪 Agent** —— 输入视频 + BGM，自动生成卡点混剪。<br>
-> **AI-powered auto video-montage agent** — feed it clips + music, get a beat-synced edit.
+> **你负责拍，它负责剪。**
+>
+> 把一堆素材和一首歌丢进去，剩下的它自己干：拆镜头 → 数节拍 → 挑高光 → 卡点排时间轴 → 配转场音效字幕。
+> 你去泡杯茶，回来拿一条能直接发抖音的 1080×1920 成片。全程本机跑，不上传云端，不花钱。
+
+> [!IMPORTANT]
+> **二次创作声明**
+> 本项目基于 [@zhangzhanglaila](https://github.com/zhangzhanglaila) 的开源项目
+> **[ai-montage-agent](https://github.com/zhangzhanglaila/ai-montage-agent)** 二次开发。
+> 原版提供了完整可用的混剪内核（拆镜头、节拍分析、高光评分、素材抓取、时间轴导出）；
+> 我在它上面修缺陷、补功能、重做前端，并重写了这份文档。
+> 原项目采用 MIT 许可证，本项目保留其原始版权声明，详见 [LICENSE](LICENSE) 与[文末声明](#关于这个项目二次创作声明)。
 
 **语言 / Language:** [简体中文](#简体中文) · [English](#english)
 
@@ -18,52 +28,50 @@
 
 # 简体中文
 
-- [功能特性](#功能特性)
-- [为什么用它](#为什么用它)
+- [三十秒读懂这个项目](#三十秒读懂这个项目)
 - [效果展示](#效果展示)
+- [二次开发增量](#二次开发增量)
+- [功能特性](#功能特性)
 - [快速开始](#快速开始)
 - [参数说明](#参数说明)
+- [风格预设](#风格预设)
 - [素材来源](#素材来源)
 - [项目结构](#项目结构)
-- [技术栈](#技术栈)
-- [说明](#说明)
+- [技术栈与性能](#技术栈与性能)
+- [关于这个项目（二次创作声明）](#关于这个项目二次创作声明)
 - [许可证](#许可证)
 
-## 功能特性
+## 三十秒读懂这个项目
 
-| 能力 | 说明 |
-|------|------|
-| ✅ 一键成片 | 素材 + BGM + 一句话，自动完成卡点混剪 |
-| ✅ 卡在节拍上 | 镜头切点对齐 BGM 强弱拍，不是平均切 |
-| ✅ 高光优先 | 运动/时长/表情/运镜/音频 5 维评分选镜头 |
-| ✅ 丝滑转场 | 10+ 转场，按节拍强度自动选择 |
-| ✅ 音效卡点 | impact / whoosh / riser 自动铺点 |
-| ✅ BGM 闪避 | 人声出现时自动压低 BGM |
-| ✅ 横转竖 | 主体跟踪 + 自动裁切，适配短视频 |
-| ✅ 字幕生成 | Whisper 转录 + 8 种样式（可选） |
-| ✅ 画面增强 | 防抖 / 降噪 / 调色 / 色彩统一 |
-| ✅ 风格预设 | 11 种预设，一键切换 |
-| ✅ 多源素材 | B站 / PlayPhrase / YouTube / Dailymotion + 直链 |
-| ✅ 双端可用 | WebUI + CLI |
-| ✅ 任务队列 | SQLite / Redis，失败重试、断点恢复 |
-| ✅ LLM 导演 | 接入 OpenAI / Ollama 后自然语言控制（可选） |
+人工剪一条 60 秒的竖屏片，正常要 1~2 小时：翻素材挑高光、卡鼓点、调转场、找音效、敲字幕。
 
-## 为什么用它
+这个工具把这些重复劳动全部自动化，你只需要给两样东西：
 
-- ✅ **不是随机切片**：镜头切点对齐鼓点、强拍和音乐段落。
-- ✅ **不是简单拼接**：5 维高光评分先筛镜头，再排时间轴。
-- ✅ **不是只有画面**：音效卡点、BGM 闪避、字幕、调色一起完成。
-- ✅ **不是只适合横屏**：主体跟踪自动裁竖屏，直接发短视频。
+```text
+素材（本地视频 / 关键词搜索 / 直链）┐
+                                    ├─→ 拆镜头 → 数节拍 → 高光打分 → 卡点排轴 → 转场·音效·字幕 → 成片
+BGM（本地音频 / 关键词搜索）        ┘
+```
+
+它**不是**把片段随机拼起来：
+
+- 切点落在 BGM 的真实鼓点和段落线上，不是平均每 2 秒切一刀；
+- 先给每个镜头打 5 维分（运动 / 时长 / 人脸 / 运镜 / 音频），高分镜头优先上场；
+- 高能段 1~2 拍一刀、铺垫段 3~4 拍一刀，转场和推镜白闪跟着能量走；
+- 音效卡点、BGM 人声闪避、字幕、调色、横转竖一起做完。
+
+产物是标准 H.264 + AAC，直接进剪映二次调整，或者导出 EDL / OTIO 回 Premiere / DaVinci 继续改。
 
 ## 效果展示
 
-### 宣传片（30 秒 · 9:16）
+### 宣传片（60 秒 · 9:16）
 
 <p align="center">
-  <a href="docs/media/promo.mp4"><img src="README.assets/promo-poster.png" width="360" alt="AI Montage Agent 30 秒宣传片"></a>
+  <a href="docs/media/promo.mp4"><img src="README.assets/promo-poster.png" width="330" alt="AI Montage Plus 60 秒宣传片"></a>
 </p>
 
-30 秒讲完这条流水线：素材与 BGM 输入 → 自动分镜卡点 → 成片 → 歌词字幕 → 纪录片套版。点海报看片（`docs/media/promo.mp4`，1080×1920 / 30fps / 30s），可直接发抖音、小红书、视频号。
+60 秒讲完这条流水线：素材输入 → 节拍可视化分镜 → 卡点快切 → 转场设置 → 字幕 → 纪录片套版 → 片尾。
+点海报看片（`docs/media/promo.mp4`，720×1280 / 60s，仓库内的压缩预览版），可直接发抖音、小红书、视频号。
 
 ### WebUI 控制台
 
@@ -71,34 +79,68 @@
   <img src="README.assets/webui-tech-console.png" alt="WebUI 科技风控制台" width="820">
 </p>
 
-从搜索素材、挑选 5 个候选，到确认素材并生成成片：
+高级设置里的转场区（这一版新增的能力都在这儿）：
 
 <p align="center">
-  <img src="README.assets/webui-materials-finished.png" alt="WebUI 素材挑选与混剪成片" width="820">
+  <img src="README.assets/webui-advanced.png" alt="WebUI 高级设置：转场风格与转场参数" width="820">
 </p>
+
+> 11 个风格卡片 + 转场时长 / 密度 / 白闪三个下拉。默认「智能推荐」即可：
+> 10 种 xfade 按强弱拍轮换，约四成保留硬切，转场时长不再被压到 0.18s。
+
+## 二次开发增量
+
+相比原版，这一版主要动了四块（完整改动记录见 [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md)）：
+
+| 方向 | 原版 | 现在 |
+|------|------|------|
+| **转场** | 视觉上只有一种“快闪”，模板参数收了但没真正生效 | 10 种 xfade 按强弱拍智能混搭，相邻两刀不重复；**时长 / 密度 / 白闪**三项在高级设置里可调 |
+| **字幕** | 收尾漏识别的最后一句被当成“未演唱”丢弃，片尾整段无字幕 | 按人声能量跨度补回漏句，末句延到片尾渐弱；对齐报告可查 |
+| **WebUI** | B 站漫画风界面 | 科技控制台风格（深色玻璃拟态 + 霓虹描边 + 切换浅色主题），DOM 与接口零改动 |
+| **渲染稳定性** | 偶发掉帧、长片时间线在中途冻结、AAC 削波 | 修掉 4 个时序 bug（xfade 丢帧率 / `-r` 重采样 / 长链 PTS 回绕 / 短素材冻结），音画严格齐长 |
+
+配套：新增 7 个回归测试（转场混搭 6 例 + 字幕尾部 1 例），零参数默认链路回归 56 项通过，并用两条真实成片（86.7s 纪录片混剪 + 60s 竖屏宣传片）验证全链路。
+
+## 功能特性
+
+| 能力 | 说明 | 来源 |
+|------|------|------|
+| ✅ 一键成片 | 素材 + BGM + 一句话，自动完成卡点混剪 | 原版 |
+| ✅ 卡在节拍上 | 镜头切点对齐 BGM 强弱拍，不是平均切 | 原版 |
+| ✅ 高光优先 | 运动 / 时长 / 表情 / 运镜 / 音频 5 维评分选镜头 | 原版 |
+| ✅ 转场混搭 | 10 种 xfade 按强弱拍轮换，时长密度白闪可调 | **二次开发** |
+| ✅ 音效卡点 | impact / whoosh / riser 自动铺点 | 原版 |
+| ✅ BGM 闪避 | 人声出现时自动压低 BGM | 原版 |
+| ✅ 横转竖 | 主体跟踪 + 自动裁切，适配短视频 | 原版 |
+| ✅ 字幕生成 | Whisper 转录 + 8 种样式，尾部漏句自动补回 | 原版 + **修复** |
+| ✅ 画面增强 | 防抖 / 降噪 / 调色 / 色彩统一 | 原版 |
+| ✅ 风格预设 | 11 种预设，一键切换 | 原版 |
+| ✅ 多源素材 | B站 / PlayPhrase / YouTube / Dailymotion + 直链 | 原版 |
+| ✅ 双端可用 | WebUI + CLI | 原版 |
+| ✅ 任务队列 | SQLite / Redis，失败重试、断点恢复 | 原版 |
+| ✅ LLM 导演 | 接入 OpenAI / Ollama 后自然语言控制（可选） | 原版 |
 
 ## 快速开始
 
 ### 1. 环境要求
 
 - Python 3.10+
-- FFmpeg（必须）
+- FFmpeg（必须，建议 7.x）
 
 ### 2. 安装
 
 ```bash
-# 安装 FFmpeg
+# FFmpeg
 # Windows: scoop install ffmpeg / choco install ffmpeg
 # Mac:     brew install ffmpeg
 # Linux:   sudo apt install ffmpeg
 
-# 安装 Python 依赖
 pip install -r requirements.txt
 ```
 
-### 3. 基础用法
+Windows 用户也可以直接双击 **`开始.bat`**（会自动把 FFmpeg 加进 PATH 并启动 WebUI）。
 
-本地视频文件：
+### 3. 本地素材 + 本地 BGM
 
 ```bash
 python pipeline.py \
@@ -108,123 +150,50 @@ python pipeline.py \
   --output my_montage.mp4
 ```
 
-关键词搜索素材（推荐 PlayPhrase，电影原片无水印）：
+### 4. 关键词搜素材（不提供素材也行）
 
 ```bash
-python pipeline.py \
-  --query "i love you" \
-  --bgm bgm.mp3 \
-  --style dynamic \
-  --output my_montage.mp4
+# 英文电影台词（PlayPhrase，原片无水印）
+python pipeline.py --query "i love you" --bgm bgm.mp3 --output my_montage.mp4
+
+# B站（走 playurl API，比 yt-dlp 稳；可能有作者水印）
+python pipeline.py --query "漫威混剪" --source bilibili --style intense --output my_montage.mp4
 ```
 
-B站素材（下载走 playurl API，比 yt-dlp 稳；可能有作者水印）：
-
-```bash
-python pipeline.py \
-  --query "漫威混剪" \
-  --source bilibili \
-  --bgm bgm.mp3 \
-  --style intense \
-  --output my_montage.mp4
-```
-
-二次剪辑（请确认素材授权）：
-
-```bash
-python pipeline.py \
-  --movies someone_montage.mp4 \
-  --bgm new_bgm.mp3 \
-  --style intense \
-  --output my_remix.mp4
-```
-
-### 4. 高级功能
-
-LLM 自然语言控制：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --prompt "做一个30秒的漫威高燃混剪，橙青调色，快节奏"
-```
-
-视频增强（防抖 + 降噪 + 调色）：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --enhance stabilize denoise color-grade
-```
-
-字幕压制：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --subtitles tiktok
-```
-
-导出时间轴（导入 Premiere / DaVinci）：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --export-timeline edl
-
-# OTIO 格式（DaVinci Resolve / Premiere Pro / FCP）
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --export-timeline otio
-```
-
-使用风格预设：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --style-preset vlog
-
-# 可用预设：action, vlog, documentary, wedding, gaming,
-#           mtv, sport, travel, cinematic, viral, lofi
-```
-
-BGM 关键词搜索（自动下载 BGM）：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm-query "高燃 BGM" \
-  --style dynamic
-```
-
-自动裁剪（横屏转竖屏）：
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --enhance auto-reframe
-```
-
-启动 WebUI：
+### 5. 启动 WebUI
 
 ```bash
 python pipeline.py --webui
 # 浏览器打开 http://localhost:8000
 ```
 
-WebUI 是两段式，避免爬完直接出片：
+WebUI 是三段式，避免“爬完直接出片”：
 
 1. 输入关键词，点 **① 搜索素材并挑选**
-2. 在候选素材里勾选 / 删除 / 添加本地视频，点 **② 确认素材，继续设置**
-3. 选 BGM、风格，点 **③ 开始混剪**
+2. 在候选里勾选 / 删除 / 追加本地视频，点 **② 确认素材，继续设置**
+3. 选 BGM、风格、目标时长、转场参数，点 **③ 开始混剪**
+
+高级设置里的转场三项（**时长 0.25~0.70s / 密度 25%~100% / 白闪 关闭或少量或较多**）是这一版新增的，默认“智能混搭”即可。
+
+### 6. 进阶用法
+
+```bash
+# LLM 自然语言控制
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 \
+  --prompt "做一个 30 秒的高燃混剪，橙青调色，快节奏"
+
+# 视频增强
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 --enhance stabilize denoise color-grade
+
+# 字幕压制（8 种样式）
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 --subtitles tiktok
+
+# 横屏转竖屏
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 --enhance auto-reframe
+
+# 导出时间轴回剪辑软件（EDL / CSV / JSON / XML / OTIO）
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 --export-timeline otio
+```
 
 ## 参数说明
 
@@ -246,7 +215,15 @@ WebUI 是两段式，避免爬完直接出片：
 | `--export-timeline` | 导出时间轴（`edl`/`csv`/`json`/`xml`/`otio`） | - |
 | `--webui` | 启动 WebUI 界面 | - |
 
-风格预设列表：
+WebUI 侧新增的转场参数（API 字段同名）：
+
+| 字段 | 取值范围 | 默认值 |
+|------|----------|--------|
+| `transition_length` | 0.05~0.80 秒 | `0.40` |
+| `transition_density` | 0.0~1.0（转场占比） | `0.60` |
+| `transition_flash` | `auto` / `off` / `low` / `high` | `auto` |
+
+## 风格预设
 
 | 预设 | 名称 | 适用场景 |
 |------|------|----------|
@@ -262,489 +239,185 @@ WebUI 是两段式，避免爬完直接出片：
 | `viral` | 爆款 | 短视频、吸睛 |
 | `lofi` | Lo-fi | 复古、文艺 |
 
-## GPU 加速（RTX 4060 实测）
-
-### 1) FFmpeg：用 NVENC 编码 + 硬件解码
-
-项目所有视频转码都走 `packages/montage/media.py`，默认 `auto`：
-
-```text
-MONTAGE_VIDEO_ENCODER=auto      # auto | nvenc | libx264
-MONTAGE_HWACCEL=auto            # auto | cuda | off
+```bash
+python pipeline.py --movies video.mp4 --bgm bgm.mp3 --style-preset vlog
 ```
-
-- `auto` 会先做一次真实的 0.2s NVENC 编码探测，成功才用 `h264_nvenc`，
-  否则自动回退 `libx264`，不会让任务失败。
-- 编码参数：NVENC 用 `-preset p5 -rc vbr -cq 23 -spatial-aq 1`；
-  CPU 回退用 `-crf 23 -preset fast`。
-- 解码：在输入前加 `-hwaccel auto`，失败会自动去掉重试。
-
-**本机踩到的坑**：FFmpeg 9.0.2 的 NVENC API 是 13.1，要求 NVIDIA 610+
-驱动；这台机器是 591.86（只到 13.0），所以 `h264_nvenc` 会报
-`Driver does not support the required nvenc API version`。
-已改装 **FFmpeg 7.1.1**（NVENC API 12.2，550+ 驱动即可），并写进
-`开始.bat` 的 `PATH`。验证：
-
-```bat
-ffmpeg -hide_banner -f lavfi -i color=black:s=320x240:d=0.2 ^
-  -c:v h264_nvenc -preset p1 -f null -
-```
-
-无报错即 NVENC 可用。若你以后升级到 610+ 驱动，可以再换回新版 FFmpeg。
-
-> 注意：`winget upgrade` 会把 FFmpeg 升回 9.0.2，又会回到“需要 610+ 驱动”
-> 的状态。升级驱动前请保留 7.1.1（或重新执行
-> `winget install --id Gyan.FFmpeg --version 7.1.1 --force`）。
-> 切镜头时已直接把素材降到 1280x720，后续分析/渲染都更快，成片分辨率不变。
-
-### 2) OpenCV：CUDA 只影响“运动分析”，不影响编码
-
-先确认当前 wheel 是否带 CUDA：
-
-```bat
-python -c "import cv2; print(cv2.__version__, cv2.cuda.getCudaEnabledDeviceCount())"
-```
-
-输出 `0` 表示 pip 官方 wheel 不带 CUDA（本机就是 `5.0.0 / 0`）。
-`MotionAnalyzer` 已做两件事：
-
-1. 有 CUDA 版 OpenCV 时自动走 `cv2.cuda.FarnebackOpticalFlow`；
-2. 没有时把画面缩到 640 宽再算 CPU 光流，并把幅度乘回原比例，
-   1080p 下通常快 4~9 倍，评分口径基本不变。
-
-所以**不建议**为了这个项目去花几小时编译 OpenCV CUDA：真正的大头是
-FFmpeg 编码，NVENC 已经接管；OpenCV 只分析每个镜头的前 30 帧。
-
-### 3) 时长/重复画面的修复
-
-旧版 `BeatSyncEngine` 只按“每镜头 1~4 拍”累加，镜头用完就结束：
-21 个镜头 × 1~2 拍 ≈ 6~10 秒，所以填 60s/600s 也只能出很短。
-现在改为：
-
-- 按目标时长给每个镜头分配秒数，自动补足到目标；
-- 从镜头内部**随机取子区间**（`source_in/source_out`），同一素材每次
-  取到的画面不同；
-- 目标越长，自动放宽“只分析前 120s”和“最多 50 个镜头”的限制；
-- 素材实在不够时明确打印警告；BGM 不够长时自动循环 BGM，不会用
-  `-shortest` 把画面截断。
-
-相关参数：WebUI 的“目标时长”上限已从 300s 放宽到 3600s；填 `0`
-表示按 BGM 剩余长度自动（上限 180s）。
-
-本机实测（同一段 120s 素材 + 90.7s BGM）：
-
-| 目标 | 修复前 | 修复后 |
-|------|--------|--------|
-| 30s | 6~10s | 30.13s（13 段） |
-| 60s | 10~11s | 60.03s（13 段） |
-| 600s | 6s | 规划器可补足；素材不足会明确警告并复用镜头 |
-
-另外修掉一个隐蔽问题：旧 `_prepare_clip` 在 `-i` 前用 `-t` 截取，
-会让 `tpad` 看不到 EOF，每段少 0.1s 左右，长片累计少近 1 秒；
-现在改用 `trim`/`atrim` 滤镜，并避开 `atempo + apad` 在 4K 源上的死锁。
-
-### 4) 从“截取 + 配乐”到真正的卡点混剪
-
-时长修好后，旧规划器仍会让 60 秒只有十几刀、平均 4.6 秒一刀，
-转场又被压到 0.08 秒（肉眼等于硬切），所以观感像“截一段 + 配乐”。
-
-`dynamic` / `intense` 风格现在改走
-[`creative.py`](packages/montage/creative.py)：
-
-- 切点直接取 BGM 的真实节拍时间，不再用中位拍间隔估算；
-- 能量高的段落 1~2 拍一刀，能量低的段落 3~4 拍一刀，
-  60 秒大约 **45~70 刀**（实测 54 个可检测画面切换，平均约 1.1s）；
-- 每个镜头提前拆成多个 1~2 秒子窗口，同一素材取不同入点，
-  不再是“同一个镜头从头放到尾”；
-- 高能段随机加 **推镜（punch）** 和 **白闪（flash）**；
-- 低能段偶尔用 0.18 秒叠化/划像，强拍保持硬切；
-- 按 BGM 能量曲线选镜头运动量：高潮用高运动镜头，铺垫用平稳镜头；
-- 自动叠约 17 个 impact / whoosh 音效；
-- 默认加轻对比 + 轻饱和 + 暗角（用户另选调色预设时不叠加）。
-
-`calm` 风格仍走原来的均匀卡点。想调快/调慢，改
-`creative.py` 里三档 `choices` 的拍数即可；想减少特效，
-调低 `effect` 的随机阈值。
-
-本机实测同一条 60 秒成片：
-
-| 版本 | 可检测画面切换 | 平均镜头 | 特效/音效 |
-|------|----------------|----------|-----------|
-| 旧版 | 12 次 | 4.6s | 无 |
-| 新版 | 54 次 | 约 1.1s | 推镜 + 白闪 + 17 音效 |
-
-GPU 编码实测（10s 720p，含解码/缩放）：
-
-| 编码器 | 耗时 | 文件大小 |
-|--------|------|----------|
-| `h264_nvenc` p5 cq23 | 1.9s | 7.7 MB |
-| `libx264` fast crf23 | 3.0s | 5.5 MB |
 
 ## 素材来源
 
 | 来源 | 适合 | 接入方式 |
 |------|------|----------|
-| `playphrase` | 英文电影台词 | 关键词搜索（Playwright + Chrome） |
+| `playphrase` | 英文电影台词 | 关键词搜索（Playwright + 系统 Chrome） |
 | `bilibili` | 动漫 / 影视 / 二创 | 关键词搜索 + playurl 下载 |
 | `youtube` | 全品类 | 关键词搜索（需可访问网络 / cookies） |
 | `dailymotion` | 全品类 | 关键词搜索 |
 | `quodb` | 台词检索 | 台词 + 电影 + 时间码 |
 | `douyin` / `ixigua` / `acfun` / `vimeo` | 短视频 / 影视 / 动漫 | 直链解析 |
 
-台词源 PlayPhrase / QuoDB 需要安装 Playwright，并使用系统已安装的 Chrome：
+台词源 PlayPhrase / QuoDB 需要 Playwright，并使用系统已安装的 Chrome：
 
 ```bash
 pip install playwright
-# 使用系统已安装的 Chrome 浏览器，无需额外下载 Chromium
+# 用系统已装 Chrome，无需额外下载 Chromium
 ```
 
 ## 项目结构
 
 ```text
-ai-montage-agent/
+AI-Montage-Plus/
 ├── pipeline.py              # 兼容入口（实际实现在 packages/montage）
 ├── requirements.txt         # Python 依赖
+├── 开始.bat                 # Windows 一键启动（FFmpeg PATH + WebUI）
 ├── packages/
 │   ├── montage/             # 核心 Pipeline（镜头/节拍/卡点/渲染）
 │   ├── core_types/          # 统一数据类型
 │   ├── video_crawler/       # 素材爬取（B站/YouTube/台词搜索/BGM 搜索）
 │   ├── video_enhancement/   # 视频增强（防抖/降噪/调色/裁剪/闪避/主体追踪）
-│   ├── subtitle_engine/     # 字幕引擎（Whisper 转录 + 压制）
+│   ├── subtitle_engine/     # 字幕引擎（Whisper 转录 + 压制 + 歌词对齐）
 │   ├── ai_director/         # LLM 自然语言控制
 │   ├── timeline_export/     # 时间轴导出（EDL/CSV/JSON/XML/OTIO）
 │   ├── sound_engine/        # 音效卡点（impact/whoosh）
 │   ├── audio_mixer/         # 多轨混音
 │   ├── montage_engine/      # 蒙太奇引擎（10+ 种转场）
 │   ├── render_engine/       # 渲染引擎（FFmpeg 执行器）
-│   └── webui/               # WebUI（FastAPI + B站漫画风格前端）
-├── apps/                    # 入口说明（主入口是 pipeline.py / --webui）
-├── scripts/                 # smoke/ 冒烟测试 + demo/ 演示
-├── artifacts/               # 演示样片（gitignored）
+│   └── webui/               # WebUI（FastAPI + SSE + 前端）
+├── docs/
+│   ├── media/promo.mp4      # 宣传片（压缩预览版）
+│   └── CONTRIBUTIONS.md     # 二次开发改动记录
+├── scripts/                 # smoke 冒烟测试 + demo 演示
 ├── var/                     # 运行产物 cache/output/uploads（gitignored）
 └── tests/                   # pytest
 ```
 
-## 技术栈
+## 技术栈与性能
 
-- **视频处理**：FFmpeg、OpenCV
-- **音频分析**：librosa
-- **字幕**：openai-whisper / faster-whisper（可选）
-- **LLM**：OpenAI 兼容 API（可选，支持 Ollama 本地部署）
-- **WebUI**：FastAPI + SSE
-- **素材爬取**：yt-dlp + B站 API + Playwright（台词搜索）
+**核心**：FFmpeg（转码/滤镜/字幕）· OpenCV（光流/主体跟踪）· librosa（节拍与能量）· PySceneDetect（镜头切分）· FastAPI + SSE（WebUI）· yt-dlp + Playwright（素材抓取）· Whisper（字幕，可选）· OpenAI 兼容 API 或 Ollama（LLM 导演，可选）
 
-## 说明
+### GPU 加速（RTX 4060 实测）
 
-- 抖音 / 西瓜 / AcFun / Vimeo 通过直链解析；WebUI 的 URL 输入框还在接入。
-- YouTube / Dailymotion 需要可访问的网络环境；YARN / 找台词网受反爬和站点状态影响。
-- Whisper 字幕、LLM 导演是可选能力，不安装也能跑基础混剪。
-- 素材版权归原作者所有，发布或商用前请确认授权。
-- 工程实现是确定性混剪流水线，LLM 用于可选的参数解析。
+编码走 `packages/montage/media.py`，默认 `auto`：
+
+```text
+MONTAGE_VIDEO_ENCODER=auto      # auto | nvenc | libx264
+MONTAGE_HWACCEL=auto            # auto | cuda | off
+```
+
+- `auto` 会先做一次真实的 0.2s NVENC 编码探测，成功才用 `h264_nvenc`，否则自动回退 `libx264`，不会让任务失败。
+- 编码参数：NVENC `-preset p5 -rc vbr -cq 23 -spatial-aq 1`；CPU 回退 `-crf 23 -preset fast`。
+
+| 编码器 | 10s 720p 耗时 | 文件大小 |
+|--------|---------------|----------|
+| `h264_nvenc` p5 cq23 | 1.9s | 7.7 MB |
+| `libx264` fast crf23 | 3.0s | 5.5 MB |
+
+> **踩坑**：FFmpeg 9.0.2 的 NVENC API 是 13.1，要求 NVIDIA 610+ 驱动；591 驱动下会报
+> `Driver does not support the required nvenc API version`。改用 FFmpeg 7.1.1（NVENC API 12.2，550+ 驱动即可）。
+> 验证：`ffmpeg -hide_banner -f lavfi -i color=black:s=320x240:d=0.2 -c:v h264_nvenc -preset p1 -f null -` 无报错即可。
+> 注意 `winget upgrade` 会把 FFmpeg 升回新版，升级驱动前请保留 7.1.1。
+
+OpenCV 的 CUDA 只影响“运动分析”，不影响编码：有 CUDA 版 wheel 时自动走 `cv2.cuda.FarnebackOpticalFlow`，没有则把画面缩到 640 宽算 CPU 光流再乘回比例，1080p 下快 4~9 倍。**不建议**为此编译 OpenCV CUDA，真正的瓶颈是 FFmpeg 编码，NVENC 已经接管。
+
+## 关于这个项目（二次创作声明）
+
+### 它从哪来
+
+| | 项目 | 作者 | 说明 |
+|---|------|------|------|
+| 原版 | [ai-montage-agent](https://github.com/zhangzhanglaila/ai-montage-agent) | [@zhangzhanglaila](https://github.com/zhangzhanglaila) | 提供了完整的混剪内核：镜头切分、节拍检测、高光评分、素材抓取、时间轴导出，MIT 许可，可直接运行 |
+| 本项目 | AI-Montage-Plus | 本仓库维护者 | 在原作者代码基础上二次开发：修缺陷、加功能、重做前端、补测试、重写文档 |
+
+原版是一个工程量相当完整的项目，这条流水线能跑起来主要靠它。我做的是“把它变得能稳定出片、能让人自己调”。
+
+### 我做了什么
+
+1. **字幕**：修掉片尾漏识别整句被丢弃的问题，改按人声能量跨度补回，末句渐弱收尾。
+2. **转场**：从“永远一种快闪”改成节拍驱动的可配置混搭，并修掉模板未生效、时长被压制、效果池变量覆盖三处 bug。
+3. **参数化**：高级设置新增转场时长 / 密度 / 白闪，前端到规划器全线打通。
+4. **前端**：整站重做为科技控制台风格，支持深浅主题切换，功能零回归。
+5. **稳定性**：修掉 xfade 丢帧率、`-r` 重采样丢帧、长链 PTS 回绕、短素材时间线冻结四个渲染 bug；处理 AAC 削波。
+6. **测试与验证**：新增 7 个回归测试，56 项零参数回归，两条真实成片（纪录片混剪 86.7s、宣传片 60s）端到端验证。
+
+细节、数据与验证方法见 [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md)。
+
+### 致谢
+
+- 原项目 [ai-montage-agent](https://github.com/zhangzhanglaila/ai-montage-agent) — [@zhangzhanglaila](https://github.com/zhangzhanglaila)
+  （如果这个工具帮到你，也去给原作者点个 ⭐）
+- [FFmpeg](https://ffmpeg.org/) · [OpenCV](https://opencv.org/) · [librosa](https://librosa.org/) · [PySceneDetect](https://github.com/Breakthrough/PySceneDetect) · [FastAPI](https://fastapi.tiangolo.com/) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Whisper](https://github.com/openai/whisper)
+
+### 素材与版权
+
+- 演示片中的游戏画面来自《影之刃零》，版权归原作者所有，仅作技术演示。
+- 素材源（B站 / YouTube / PlayPhrase 等）的版权归各自权利人，发布或商用前请自行确认授权。
+- 本项目不自带任何素材，不提供任何破解或去水印能力。
 
 ## 许可证
 
-[MIT License](LICENSE)
+[MIT License](LICENSE) —— 保留原作者版权声明，二次开发部分同样以 MIT 发布。
 
-[⬆ 返回顶部 / Back to top](#ai-montage-agent)
-
-如果这个项目对你有帮助，欢迎赞赏支持 ☕
-
-![e2704e340ac74802081327175480db49](README.assets/e2704e340ac74802081327175480db49.png)
+[⬆ 返回顶部](#ai-montage-plus)
 
 ---
 
 # English
 
-- [Features](#features)
-- [Why use it](#why-use-it)
-- [Quick Start](#quick-start)
-- [Arguments](#arguments)
-- [Sources](#sources)
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [Notes](#notes)
+**AI Montage Plus** — a beat-synced automatic video montage agent. Feed it clips and a song, get a finished vertical edit: shot detection → beat analysis → highlight scoring → beat-aligned timeline → transitions, SFX, subtitles.
+
+> **Fork notice:** this is a derivative work of **[ai-montage-agent](https://github.com/zhangzhanglaila/ai-montage-agent)** by **[@zhangzhanglaila](https://github.com/zhangzhanglaila)** (MIT). The upstream project provides the montage core; this fork fixes defects, adds transition controls, rebuilds the WebUI, and adds tests. Original copyright is preserved — see [LICENSE](LICENSE).
+
+- [What it is](#what-it-is)
+- [What this fork changes](#what-this-fork-changes)
+- [Quick start](#quick-start)
 - [License](#license)
 
-## Features
+## What it is
 
-| Capability | What it does |
-|------------|--------------|
-| ✅ One-click edit | Clips + BGM + one prompt → finished beat-synced montage |
-| ✅ On-beat cuts | Shot cuts aligned to strong/weak beats, not evenly spaced |
-| ✅ Highlight-first | 5-axis scoring (motion / duration / faces / camera / audio) |
-| ✅ Smooth transitions | 10+ transitions chosen by beat intensity |
-| ✅ SFX on beats | impact / whoosh / riser cues placed automatically |
-| ✅ BGM ducking | Music ducks under dialogue |
-| ✅ Landscape → portrait | Subject tracking + auto reframe for short-form |
-| ✅ Subtitles | Whisper transcription + 8 styles (optional) |
-| ✅ Enhancement | Stabilize / denoise / color grade / color harmonize |
-| ✅ Style presets | 11 one-click presets |
-| ✅ Multi-source | Bilibili / PlayPhrase / YouTube / Dailymotion + direct URLs |
-| ✅ WebUI + CLI | Browser UI and command line |
-| ✅ Task queue | SQLite / Redis, retries and resume |
-| ✅ LLM director | Optional natural-language control via OpenAI / Ollama |
+Hand-editing a 60-second vertical video takes 1–2 hours: hunting highlights, cutting on the beat, tuning transitions, adding SFX, typing subtitles. This tool automates the boring 90%:
 
-## Why use it
+- cuts land on real drum hits and song sections — not on a fixed 2-second grid;
+- shots are scored on 5 axes (motion / duration / faces / camera / audio) before the timeline is built;
+- 1–2 beats per cut in high-energy sections, 3–4 in build-ups; punch-ins and flashes follow the energy curve;
+- SFX cues, BGM ducking, subtitles, color and landscape→portrait reframing are all handled.
 
-- ✅ **Not random cuts** — cuts land on drums, strong beats, and song sections.
-- ✅ **Not just stitching** — 5-axis highlight scoring picks shots before the timeline.
-- ✅ **Not just video** — SFX, BGM ducking, subtitles, and color are handled together.
-- ✅ **Not landscape-only** — subject tracking auto-reframes to vertical for short-form.
+Output is plain H.264 + AAC — ready for CapCut, or export EDL / OTIO back into Premiere / DaVinci.
 
-> UI showcase: [see the full-page screenshot](#效果展示) in the Chinese section.
+## What this fork changes
 
-## Quick Start
+| Area | Upstream | This fork |
+|------|----------|-----------|
+| Transitions | effectively one flash style; template ignored | 10 xfade types mixed by beat strength, no repeat back-to-back; length / density / flash exposed in the UI |
+| Subtitles | final line dropped when Whisper missed it | re-inserted from vocal span, fades out at the tail |
+| WebUI | comic-style UI | "tech console" theme with light/dark switch, zero DOM/API changes |
+| Stability | dropped frames, timeline freeze on long cuts, AAC clipping | 4 timing bugs fixed: xfade metadata loss, `-r` resampling, long-chain PTS wrap, short-clip freeze |
 
-### 1. Requirements
+Full changelog: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 
-- Python 3.10+
-- FFmpeg (required)
-
-### 2. Installation
+## Quick start
 
 ```bash
-# Install FFmpeg
-# Windows: scoop install ffmpeg / choco install ffmpeg
-# Mac:     brew install ffmpeg
-# Linux:   sudo apt install ffmpeg
-
-# Install Python dependencies
 pip install -r requirements.txt
+
+python pipeline.py --movies a.mp4 b.mp4 --bgm song.mp3 --style dynamic --output out.mp4
+
+python pipeline.py --query "i love you" --bgm song.mp3          # search clips by keyword
+python pipeline.py --webui                                       # http://localhost:8000
 ```
-
-### 3. Basic Usage
-
-Local video files:
-
-```bash
-python pipeline.py \
-  --movies movie1.mp4 movie2.mp4 \
-  --bgm bgm.mp3 \
-  --style dynamic \
-  --output my_montage.mp4
-```
-
-Search clips by keyword (PlayPhrase recommended — original film clips, no watermark):
-
-```bash
-python pipeline.py \
-  --query "i love you" \
-  --bgm bgm.mp3 \
-  --style dynamic \
-  --output my_montage.mp4
-```
-
-Bilibili clips (playurl API is used for downloads; may carry creator watermarks):
-
-```bash
-python pipeline.py \
-  --query "marvel montage" \
-  --source bilibili \
-  --bgm bgm.mp3 \
-  --style intense \
-  --output my_montage.mp4
-```
-
-Re-edit existing footage (make sure you have the rights):
-
-```bash
-python pipeline.py \
-  --movies someone_montage.mp4 \
-  --bgm new_bgm.mp3 \
-  --style intense \
-  --output my_remix.mp4
-```
-
-### 4. Advanced Features
-
-LLM natural-language control:
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --prompt "make a 30s high-energy Marvel montage, teal-orange grade, fast cuts"
-```
-
-Video enhancement (stabilize + denoise + color grade):
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --enhance stabilize denoise color-grade
-```
-
-Burn-in subtitles:
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --subtitles tiktok
-```
-
-Export timeline (import into Premiere / DaVinci):
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --export-timeline edl
-
-# OTIO format (DaVinci Resolve / Premiere Pro / FCP)
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --export-timeline otio
-```
-
-Use a style preset:
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --style-preset vlog
-
-# Available presets: action, vlog, documentary, wedding, gaming,
-#                    mtv, sport, travel, cinematic, viral, lofi
-```
-
-Search BGM by keyword (auto-download):
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm-query "epic BGM" \
-  --style dynamic
-```
-
-Auto-reframe (landscape → portrait):
-
-```bash
-python pipeline.py \
-  --movies video.mp4 \
-  --bgm bgm.mp3 \
-  --enhance auto-reframe
-```
-
-Launch the WebUI:
-
-```bash
-python pipeline.py --webui
-# Open http://localhost:8000 in your browser
-```
-
-The WebUI is a two-stage flow:
-
-1. Enter a keyword, click **① Search & pick clips**
-2. Select / delete / add local clips, click **② Confirm clips**
-3. Choose BGM and style, click **③ Start montage**
-
-## Arguments
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--movies` | Local video file paths (one or more) | - |
-| `--query` | Search keyword (mutually exclusive with `--movies`) | - |
-| `--source` | Clip source | `playphrase` |
-| `--clip-limit` | Max clips to download (`--query` mode only) | `20` |
-| `--bgm` | BGM file path (auto-searched if omitted) | - |
-| `--bgm-query` | BGM search keyword (auto by `--style` if omitted) | - |
-| `--style` | Base style (`dynamic`/`calm`/`intense`) | `dynamic` |
-| `--style-preset` | Style preset (overrides `--style` and `--enhance`) | - |
-| `--output` | Output filename | `final.mp4` |
-| `--threshold` | Shot detection sensitivity (0.01~1.0, lower = finer cuts) | `0.2` |
-| `--prompt` | Natural-language description | - |
-| `--subtitles` | Subtitle style (`none`/`tiktok`/`youtube`/`minimal`/`karaoke`/`bold`/`cinematic`/`bilingual`) | `none` |
-| `--enhance` | Enhancements (`stabilize`/`denoise`/`color-grade`/`auto-reframe`) | - |
-| `--export-timeline` | Timeline export (`edl`/`csv`/`json`/`xml`/`otio`) | - |
-| `--webui` | Launch the WebUI | - |
-
-Style presets:
-
-| Preset | Name | Best for |
-|--------|------|----------|
-| `action` | Action | Fast-paced, high-intensity |
-| `vlog` | Vlog | Everyday, relaxed |
-| `documentary` | Documentary | Steady, professional |
-| `wedding` | Wedding | Romantic, warm |
-| `gaming` | Gaming | High-energy, flashy |
-| `mtv` | MTV | Music video, rhythmic |
-| `sport` | Sport | Dynamic, passionate |
-| `travel` | Travel | Soothing, fresh |
-| `cinematic` | Cinematic | Blockbuster feel |
-| `viral` | Viral | Short-form, eye-catching |
-| `lofi` | Lo-fi | Retro, artsy |
-
-## Sources
-
-| Source | Best for | How it works |
-|--------|----------|--------------|
-| `playphrase` | English film quotes | Keyword search (Playwright + Chrome) |
-| `bilibili` | Anime / film / fan edits | Keyword search + playurl download |
-| `youtube` | All categories | Keyword search (network / cookies required) |
-| `dailymotion` | All categories | Keyword search |
-| `quodb` | Quote lookup | Quote + film + timecode |
-| `douyin` / `ixigua` / `acfun` / `vimeo` | Short-form / film / anime | Direct URL parsing |
-
-PlayPhrase / QuoDB require Playwright and the system-installed Chrome:
-
-```bash
-pip install playwright
-# Uses the system-installed Chrome browser; no extra Chromium download needed
-```
-
-## Project Structure
-
-```text
-ai-montage-agent/
-├── pipeline.py              # Compatibility entry (implementation in packages/montage)
-├── requirements.txt         # Python dependencies
-├── packages/
-│   ├── montage/             # Core pipeline (shots/beats/sync/render)
-│   ├── core_types/          # Shared data types
-│   ├── video_crawler/       # Clip crawling (Bilibili/YouTube/quote/BGM search)
-│   ├── video_enhancement/   # Enhancement (stabilize/denoise/grade/reframe/ducking/tracking)
-│   ├── subtitle_engine/     # Subtitle engine (Whisper transcribe + burn-in)
-│   ├── ai_director/         # LLM natural-language control
-│   ├── timeline_export/     # Timeline export (EDL/CSV/JSON/XML/OTIO)
-│   ├── sound_engine/        # Beat-synced SFX (impact/whoosh)
-│   ├── audio_mixer/         # Multi-track audio mixing
-│   ├── montage_engine/      # Montage engine (10+ transitions)
-│   ├── render_engine/       # Render engine (FFmpeg executor)
-│   └── webui/               # WebUI (FastAPI + Bilibili-comic-style frontend)
-├── apps/                    # Entry-point notes (main entry: pipeline.py / --webui)
-├── scripts/                 # smoke/ tests + demo/ samples
-├── artifacts/               # Demo renders (gitignored)
-├── var/                     # Runtime artifacts cache/output/uploads (gitignored)
-└── tests/                   # pytest
-```
-
-## Tech Stack
-
-- **Video processing**: FFmpeg, OpenCV
-- **Audio analysis**: librosa
-- **Subtitles**: openai-whisper / faster-whisper (optional)
-- **LLM**: OpenAI-compatible API (optional, supports local Ollama)
-- **WebUI**: FastAPI + SSE
-- **Clip crawling**: yt-dlp + Bilibili API + Playwright (quote search)
-
-## Notes
-
-- Douyin / Xigua / AcFun / Vimeo use direct-URL parsing; the WebUI URL input is still being wired up.
-- YouTube / Dailymotion depend on network access; YARN / Zhaotaici are affected by anti-bot and site status.
-- Whisper subtitles and LLM direction are optional; the core montage works without them.
-- All footage remains the property of its original creator; clear the rights before publishing or commercial use.
-- Under the hood this is a deterministic montage pipeline; the LLM parses optional parameters.
+| `--movies` | Local video files | - |
+| `--query` | Keyword search (instead of `--movies`) | - |
+| `--source` | `playphrase` / `bilibili` / `youtube` / `dailymotion` | `playphrase` |
+| `--bgm` | BGM file (auto-searched if omitted) | - |
+| `--style` | `dynamic` / `calm` / `intense` | `dynamic` |
+| `--style-preset` | 11 presets (`action`, `vlog`, `documentary`, `wedding`, `gaming`, `mtv`, `sport`, `travel`, `cinematic`, `viral`, `lofi`) | - |
+| `--subtitles` | 8 styles or `none` | `none` |
+| `--enhance` | `stabilize` / `denoise` / `color-grade` / `auto-reframe` | - |
+| `--export-timeline` | `edl` / `csv` / `json` / `xml` / `otio` | - |
+| `--webui` | Launch the browser UI | - |
 
 ## License
 
-[MIT License](LICENSE)
+[MIT](LICENSE). Upstream copyright (ai-montage-agent by zhangzhanglaila) preserved; fork released under the same license.
 
-[⬆ Back to top](#ai-montage-agent)
-
-If this project helps you, feel free to buy me a coffee ☕
-
-![e2704e340ac74802081327175480db49](README.assets/e2704e340ac74802081327175480db49-1792459188812-2.png)
+[⬆ Back to top](#ai-montage-plus)

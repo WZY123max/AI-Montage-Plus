@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Montage Agent</title>
+    <title>AI Montage Plus</title>
     <style>
 
 /* ==========================================================================
@@ -258,7 +258,7 @@ body.theme-light .header h1 {
     color: var(--muted);
     letter-spacing: .3px;
 }
-input[type="text"], input[type="number"], input[type="file"],
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 select, textarea {
     width: 100%;
     padding: 10px 13px;
@@ -715,7 +715,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <span class="sys-tag" id="sys-clock">--:--:--</span>
                 <button type="button" class="theme-btn" id="theme-btn" onclick="toggleTechTheme()">◐ 浅色科技</button>
             </div>
-            <h1>AI MONTAGE AGENT</h1>
+            <h1>AI MONTAGE PLUS</h1>
             <p class="subtitle">节拍驱动 · 歌词对齐 · 智能转场 // AUTOMATED VIDEO MONTAGE CONSOLE</p>
         </div>
 
@@ -778,21 +778,21 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <div style="margin-top:14px;">
                     <button class="btn btn-primary" id="search-materials-btn"
                             onclick="searchMaterials()">① 搜索素材并挑选</button>
-                    <p id="material-search-status" style="font-size:13px;color:#666;margin-top:8px;text-align:center;"></p>
+                    <p id="material-search-status" style="font-size:13px; margin-top:8px; text-align:center";></p>
                 </div>
             </div>
 
             <!-- 视频直链导入：抖音/西瓜/AcFun/Vimeo 这类不支持搜索的站点只能走这里 -->
-            <div style="border:2px dashed #000; border-radius:4px; padding:12px; margin-top:14px; background:#fafafa;">
+            <div style="border-radius:4px; padding:12px; margin-top:14px";>
                 <label style="font-size:0.85em; font-weight:700; display:block; margin-bottom:6px;">
                     或从视频链接导入（抖音 / 西瓜 / AcFun / Vimeo / YouTube / B站）
                 </label>
                 <textarea id="url-input" rows="2"
-                          style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-family:inherit; font-size:0.85em; resize:vertical;"
+                          style="width:100%; padding:8px 10px; border-radius:4px; font-family:inherit; font-size:0.85em; resize:vertical";
                           placeholder="一行一个链接，例如：https://www.douyin.com/video/xxxx"></textarea>
                 <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap;">
                     <button class="btn btn-secondary btn-small" id="url-import-btn" onclick="importUrls()">导入链接</button>
-                    <span id="url-import-status" style="font-size:0.82em; color:#666;"></span>
+                    <span id="url-import-status" style="font-size:0.82em";></span>
                 </div>
             </div>
         </div>
@@ -800,7 +800,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
         <!-- 1.5 候选素材 -->
         <div class="card hidden" id="material-section">
             <h2><span class="num">2</span> 候选素材 <span id="material-count" style="font-size:0.7em;color:#FB7299;"></span></h2>
-            <p id="material-step-note" style="font-size:13px;color:#666;margin-bottom:12px;">
+            <p id="material-step-note" style="font-size:13px; margin-bottom:12px";>
                 已停在第 2 步：不会自动开始混剪。勾选想用的片段，不需要的可以删掉。
             </p>
             <div class="material-actions">
@@ -855,7 +855,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
             <div class="style-grid" id="style-grid">
                 <!-- JS 动态渲染 -->
             </div>
-            <p id="style-desc" style="font-size:0.85em; color:#666; margin-top:12px; min-height:1.2em; text-align:center;"></p>
+            <p id="style-desc" style="font-size:0.85em; margin-top:12px; min-height:1.2em; text-align:center";></p>
             <input type="hidden" id="style-value" value="dynamic">
             <input type="hidden" id="style-preset-value" value="">
         </div>
@@ -863,7 +863,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
         <!-- 5. 高级设置 -->
         <div class="card">
             <div class="adv-toggle" onclick="toggleAdvPanel()">
-                <span><span class="num" style="display:inline-flex;width:28px;height:28px;background:#FB7299;color:#fff;font-size:0.85em;font-weight:900;border:2px solid #000;align-items:center;justify-content:center;flex-shrink:0;vertical-align:middle;margin-right:8px;">5</span> 高级设置</span>
+                <span><span class="num" style="display:inline-flex; width:28px; height:28px; background:#FB7299; color:#fff; font-size:0.85em; font-weight:900; align-items:center; justify-content:center; flex-shrink:0; vertical-align:middle; margin-right:8px";>5</span> 高级设置</span>
                 <span class="arrow">&#9660;</span>
             </div>
             <div class="adv-panel" id="adv-panel">
@@ -950,8 +950,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                     <div id="subtitle-options" style="display:none; margin-top:10px;">
                         <div style="display:flex; gap:10px;">
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕样式</label>
-                                <select id="subtitle-style" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>字幕样式</label>
+                                <select id="subtitle-style" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <optgroup label="通用">
                                         <option value="tiktok">TikTok（居中大字）</option>
                                         <option value="youtube">YouTube（底部标准）</option>
@@ -974,8 +974,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </select>
                             </div>
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">语言</label>
-                                <select id="subtitle-lang" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>语言</label>
+                                <select id="subtitle-lang" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="auto">自动检测</option>
                                     <option value="zh">中文</option>
                                     <option value="en">英文</option>
@@ -984,8 +984,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </select>
                             </div>
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕语言</label>
-                                <select id="subtitle-mode" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>字幕语言</label>
+                                <select id="subtitle-mode" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="mono">单语（只出原文）</option>
                                     <option value="bilingual:auto">双语：原文 + 自动译文</option>
                                     <option value="bilingual:en">双语：原文 + 英文</option>
@@ -996,28 +996,28 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </select>
                             </div>
                         </div>
-                        <p id="subtitle-hint" style="display:none; font-size:0.8em; color:#6b4f0f; background:#fff8e1; border-left:3px solid #f0b400; padding:6px 8px; margin:8px 0 0; line-height:1.5;"></p>
+                        <p id="subtitle-hint" style="display:none; font-size:0.8em; color:#6b4f0f; border-left:3px solid #f0b400; padding:6px 8px; margin:8px 0 0; line-height:1.5";></p>
 
                         <!-- 字幕文字来源：唱词不要指望语音识别 -->
                         <div style="margin-top:10px;">
-                            <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕文字来源</label>
-                            <select id="subtitle-source" onchange="toggleLyricBox()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                            <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>字幕文字来源</label>
+                            <select id="subtitle-source" onchange="toggleLyricBox()" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                 <option value="auto">自动（填了歌词就用歌词，否则语音识别）</option>
                                 <option value="asr">语音识别（对白 / 口播）</option>
                                 <option value="lyrics">歌词（歌曲 / 音乐视频，推荐）</option>
                             </select>
                             <div id="lyric-box" style="display:none; margin-top:8px;">
                                 <textarea id="lyric-text" rows="5" placeholder="粘贴歌词：纯文本一行一句，或带时间戳的 LRC（[00:12.34]歌词）
-留空会自动读取 BGM 内嵌歌词 / 同名 .lrc" style="width:100%; box-sizing:border-box; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.86em; line-height:1.5; font-family:inherit; resize:vertical;"></textarea>
+留空会自动读取 BGM 内嵌歌词 / 同名 .lrc"></textarea>
                                 <div style="display:flex; gap:10px; margin-top:8px; align-items:flex-end;">
                                     <div style="flex:1;">
-                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">时间偏移（秒，留空自动估计）</label>
+                                        <label style="font-size:0.8em; font-weight:700; display:block; margin-bottom:4px";>时间偏移（秒，留空自动估计）</label>
                                         <input type="number" id="lyric-offset" step="0.1" placeholder="自动"
-                                               style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                                               style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em";>
                                     </div>
                                     <div style="flex:1;">
-                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">重复段（副歌唱第二遍/第三遍）</label>
-                                        <select id="lyric-repeat" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                        <label style="font-size:0.8em; font-weight:700; display:block; margin-bottom:4px";>重复段（副歌唱第二遍/第三遍）</label>
+                                        <select id="lyric-repeat" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                             <option value="auto">自动检测并补齐（推荐）</option>
                                             <option value="off">不补齐，只出一遍</option>
                                             <option value="2">最多补 2 遍</option>
@@ -1028,17 +1028,17 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </div>
                                 <div style="display:flex; gap:10px; margin-top:8px; align-items:flex-end;">
                                     <div style="flex:2;">
-                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">古风 DJ / remix 版适配</label>
-                                        <select id="dj-mode" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                        <label style="font-size:0.8em; font-weight:700; display:block; margin-bottom:4px";>古风 DJ / remix 版适配</label>
+                                        <select id="dj-mode" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                             <option value="auto">自动（提纯人声 + 找原版 + 变速对齐，推荐）</option>
                                             <option value="enhance">只提纯人声，不做变速对齐</option>
                                             <option value="off">关闭（按普通歌曲处理）</option>
                                         </select>
                                     </div>
                                     <div style="flex:1;">
-                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">变速比（留空自动估）</label>
+                                        <label style="font-size:0.8em; font-weight:700; display:block; margin-bottom:4px";>变速比（留空自动估）</label>
                                         <input type="number" id="dj-ratio" step="0.01" min="0.5" max="2.5" placeholder="自动"
-                                               style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                                               style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em";>
                                     </div>
                                 </div>
                                 <p style="font-size:0.78em; color:#555; margin:6px 0 0; line-height:1.5;">
@@ -1052,13 +1052,13 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                         </div>
                         <div style="display:flex; gap:10px; margin-top:10px;">
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字号（0 = 按样式自动，随画幅缩放）</label>
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>字号（0 = 按样式自动，随画幅缩放）</label>
                                 <input type="number" id="subtitle-size" value="0" min="0" max="200" step="2"
-                                       style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                                       style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em";>
                             </div>
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">颜色</label>
-                                <select id="subtitle-color" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>颜色</label>
+                                <select id="subtitle-color" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="">跟随样式</option>
                                     <option value="white">白色</option>
                                     <option value="yellow">黄色</option>
@@ -1069,8 +1069,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </select>
                             </div>
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">位置</label>
-                                <select id="subtitle-position" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>位置</label>
+                                <select id="subtitle-position" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="auto">跟随样式</option>
                                     <option value="lyric">歌词（避开底部原有字幕）</option>
                                     <option value="top">顶部</option>
@@ -1081,8 +1081,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                         </div>
                         <div style="display:flex; gap:10px; margin-top:10px;">
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">视频比例（字幕适配）</label>
-                                <select id="subtitle-aspect" onchange="onSubtitleAspectChange()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>视频比例（字幕适配）</label>
+                                <select id="subtitle-aspect" onchange="onSubtitleAspectChange()" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="auto">自动（跟随成片，推荐）</option>
                                     <option value="16:9">横屏 16:9</option>
                                     <option value="9:16">竖屏 9:16</option>
@@ -1091,8 +1091,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                                 </select>
                             </div>
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕大小档位</label>
-                                <select id="subtitle-fit" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>字幕大小档位</label>
+                                <select id="subtitle-fit" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="auto">自动适配</option>
                                     <option value="small">偏小</option>
                                     <option value="normal">标准</option>
@@ -1107,8 +1107,8 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                         </p>
                         <div style="display:flex; gap:10px; margin-top:10px; align-items:flex-end;">
                             <div style="flex:1;">
-                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">片尾音乐渐弱</label>
-                                <select id="bgm-fade-out" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <label style="font-size:0.82em; font-weight:700; display:block; margin-bottom:4px";>片尾音乐渐弱</label>
+                                <select id="bgm-fade-out" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                                     <option value="auto">自动（最后 2~4.5 秒，推荐）</option>
                                     <option value="off">不渐弱（保持原样）</option>
                                     <option value="2">短淡出 2 秒</option>
@@ -1129,7 +1129,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                         <span id="cache-usage" style="font-size:0.85em; color:#555;">读取中…</span>
                         <button type="button" id="cache-cleanup-btn" onclick="cleanupCache()"
-                                style="padding:6px 14px; border:2px solid #000; border-radius:4px; background:#fff; font-size:0.82em; font-weight:700; cursor:pointer;">
+                                style="padding:6px 14px; border-radius:4px; font-size:0.82em; font-weight:700; cursor:pointer";>
                             立即清理缓存
                         </button>
                     </div>
@@ -1189,7 +1189,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <!-- 镜头密度 -->
                 <div class="form-group">
                     <label>镜头密度 / 成片长度</label>
-                    <select id="shot-density" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                    <select id="shot-density" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                         <option value="standard" selected>标准（默认，镜头间留 1s 间隔）</option>
                         <option value="dense">密集（更多镜头，间隔 0.5s）</option>
                         <option value="max">极密（尽量用满素材，间隔 0）</option>
@@ -1205,14 +1205,14 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <!-- 输出画质 -->
                 <div class="form-group">
                     <label>输出画质</label>
-                    <select id="render-quality" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                    <select id="render-quality" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                         <option value="auto" selected>自动（跟随素材：1080p 素材出 1080p）</option>
                         <option value="4k">4K（3840×2160，最清晰但很慢）</option>
                         <option value="1440p">2K（2560×1440）</option>
                         <option value="1080p">1080p（1920×1080）</option>
                         <option value="720p">720p（1280×720，文件小）</option>
                     </select>
-                    <p style="font-size:0.78em; color:#666; margin-top:4px; line-height:1.4;">
+                    <p style="font-size:0.78em; margin-top:4px; line-height:1.4";>
                         编码固定用 CRF 18（近无损）。选高于素材的分辨率只是放大，不会更清晰。
                     </p>
                 </div>
@@ -1220,7 +1220,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <!-- 镜头检测灵敏度 -->
                 <div class="form-group">
                     <label>镜头检测灵敏度</label>
-                    <select id="detect-threshold" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                    <select id="detect-threshold" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                         <option value="0.2" selected>精细（0.2，切得更碎）</option>
                         <option value="0.35">标准（0.35）</option>
                         <option value="0.5">动漫 / 快剪（0.5）</option>
@@ -1264,7 +1264,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                 <!-- 视频防抖 -->
                 <div class="form-group">
                     <label>视频防抖</label>
-                    <select id="stabilize-mode" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                    <select id="stabilize-mode" style="width:100%; padding:8px 10px; border-radius:4px; font-size:0.88em; font-family:inherit";>
                         <option value="auto" selected>跟随风格模板</option>
                         <option value="true">强制开启（更稳，渲染更慢）</option>
                         <option value="false">关闭</option>
@@ -1296,7 +1296,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
         </div>
 
         <!-- 提交 -->
-        <p id="submit-hint" style="text-align:center;font-size:13px;color:#666;margin-bottom:8px;">
+        <p id="submit-hint" style="text-align:center; font-size:13px; margin-bottom:8px";>
             第 1 步：先搜索并确认素材
         </p>
         <button class="btn btn-primary" id="submit-btn" onclick="submitTask()">③ 开始混剪</button>
@@ -1320,32 +1320,32 @@ input[type="checkbox"] { accent-color: var(--cyan); }
         <div class="card result" id="result-section">
             <h2>混剪完成!</h2>
             <video id="proxy-video" controls playsinline preload="metadata"
-                   style="width:100%; max-width:560px; border-radius:8px; background:#000; border:2px solid #000;"></video>
+                   style="width:100%; max-width:560px; border-radius:8px; background:#000";></video>
             <p style="margin: 10px 0 4px;"><a id="download-link" href="#">下载原片</a></p>
-            <p style="font-size:0.8em; color:#666; margin:0 0 8px; line-height:1.5;">
+            <p style="font-size:0.8em; margin:0 0 8px; line-height:1.5";>
                 上面播放的是<b>为秒开而压过的预览版</b>（1280 宽、高压缩），会显得比成片糊。
                 判断清晰度请下载原片，或用下面的「播放原片」。
             </p>
             <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:6px;">
                 <a id="raw-link" href="#" target="_blank" rel="noopener"
-                   style="padding:7px 14px; background:#fff; border:2px solid #000; border-radius:6px; font-weight:700; font-size:0.85em; text-decoration:none; color:#000;">
+                   style="padding:7px 14px; border-radius:6px; font-weight:700; font-size:0.85em; text-decoration:none";>
                    播放原片（不压缩）
                 </a>
-                <span id="output-meta" style="font-size:0.82em; color:#666; align-self:center;"></span>
+                <span id="output-meta" style="font-size:0.82em; align-self:center";></span>
             </div>
-            <div id="result-warnings" style="display:none; text-align:left; font-size:0.85em; color:#8a4b00; background:#fff7e6; border:2px dashed #000; border-radius:6px; padding:10px 12px; margin:12px 0;"></div>
+            <div id="result-warnings" style="display:none; text-align:left; font-size:0.85em; color:#8a4b00; border-radius:6px; padding:10px 12px; margin:12px 0";></div>
             <div style="display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:6px;">
                 <button type="button" id="btn-preview"
-                        style="padding:9px 16px; background:#fff; border:2px solid #000; border-radius:6px; font-family:inherit; font-weight:700; cursor:pointer; font-size:0.88em;">
+                        style="padding:9px 16px; border-radius:6px; font-family:inherit; font-weight:700; cursor:pointer; font-size:0.88em";>
                     参数预览（前 6 秒）
                 </button>
-                <span id="preview-status" style="font-size:0.85em; color:#666;"></span>
+                <span id="preview-status" style="font-size:0.85em";></span>
             </div>
             <div id="preview-box" style="display:none; margin-top:14px;">
-                <div style="font-size:0.85em; font-weight:700; color:#333; margin-bottom:6px;">参数预览</div>
+                <div style="font-size:0.85em; font-weight:700; margin-bottom:6px";>参数预览</div>
                 <video id="preview-video" controls playsinline preload="metadata"
-                       style="width:100%; max-width:560px; border-radius:8px; background:#000; border:2px solid #000;"></video>
-                <p id="preview-meta" style="font-size:0.82em; color:#666; margin-top:6px;"></p>
+                       style="width:100%; max-width:560px; border-radius:8px; background:#000";></video>
+                <p id="preview-meta" style="font-size:0.82em; margin-top:6px";></p>
             </div>
         </div>
 
@@ -1354,7 +1354,7 @@ input[type="checkbox"] { accent-color: var(--cyan); }
             <h2><span class="num">↺</span> 任务历史</h2>
             <div class="material-actions">
                 <button class="btn btn-secondary btn-small" onclick="loadTasks()">刷新列表</button>
-                <span id="history-status" style="font-size:0.82em; color:#666;"></span>
+                <span id="history-status" style="font-size:0.82em";></span>
             </div>
             <div style="overflow-x:auto;">
                 <table class="source-table" id="history-table">
@@ -2565,9 +2565,9 @@ input[type="checkbox"] { accent-color: var(--cyan); }
                     if (t.status === "pending" || t.status === "queued") {
                         ops.push(`<button class="material-del" onclick="cancelTask('${t.id}')">取消</button>`);
                     }
-                    if (!ops.length) ops.push(`<span style="font-size:12px;color:#999;">${escapeHtml((t.message || "").slice(0, 18))}</span>`);
+                    if (!ops.length) ops.push(`<span style="font-size:12px";>${escapeHtml((t.message || "").slice(0, 18))}</span>`);
                     return `<tr>
-                        <td style="font-size:12px;color:#666;">${escapeHtml(when)}</td>
+                        <td style="font-size:12px";>${escapeHtml(when)}</td>
                         <td style="font-size:12px;">${kind}</td>
                         <td><span class="badge ${stCls(t.status)}">${escapeHtml(t.status)}</span></td>
                         <td style="font-size:12px;">${Math.round(Number(t.progress) || 0)}%</td>
