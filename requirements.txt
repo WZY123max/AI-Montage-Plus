@@ -1,0 +1,58 @@
+# AI Montage Agent 依赖清单
+
+# ============ 视频处理 ============
+ffmpeg-python>=0.2.0        # FFmpeg Python绑定
+scenedetect[opencv]>=0.6.2  # 镜头检测
+opencv-python>=4.8.0        # 图像处理
+yt-dlp>=2024.1.0            # 视频下载（B站/YouTube等）
+requests>=2.31.0            # HTTP请求
+beautifulsoup4>=4.12.0      # HTML解析
+
+# ============ 音频分析 ============
+librosa>=0.10.0             # 音频分析、节拍检测
+soundfile>=0.12.0           # 音频文件读写
+numpy>=1.24.0               # 数值计算
+
+# ============ AI/ML模型 ============
+torch>=2.0.0                # PyTorch深度学习框架
+torchvision>=0.15.0         # 计算机视觉模型
+transformers>=4.30.0        # HuggingFace模型库
+open-clip-torch>=2.20.0     # CLIP模型
+
+# ============ 后端API ============
+fastapi>=0.100.0            # Web框架
+uvicorn[standard]>=0.23.0   # ASGI服务器
+python-multipart>=0.0.6     # 文件上传支持
+
+# ============ 数据处理 ============
+pandas>=2.0.0               # 数据分析
+pydantic>=2.0.0             # 数据验证
+
+# ============ 工具库 ============
+python-dotenv>=1.0.0        # 环境变量
+loguru>=0.7.0               # 日志
+rich>=13.0.0                # 终端美化
+typer>=0.9.0                # CLI框架
+tqdm>=4.65.0                # 进度条
+Pillow>=10.0.0              # 图像处理
+
+# ============ 浏览器自动化（台词搜索用） ============
+playwright>=1.40.0           # 浏览器自动化（YARN/PlayPhrase/QuoDB/找台词网）
+
+# ============ 字幕 & LLM ============
+# 自动字幕（WebUI 的"自动字幕"开关）依赖下面两个之一，至少装一个；
+# 直接 `pip install openai-whisper` 即可（torch 已在上面装好）。
+openai-whisper>=20231117    # 语音转字幕（需要 ffmpeg 在 PATH）
+# faster-whisper>=0.10.0    # 更快的 whisper 实现（与上面二选一）
+
+# ============ 配音（TTS） ============
+edge-tts>=7.0.0             # 旁白语音合成（免费、无需 API Key，需要联网）
+
+# ============ 可选依赖 ============
+# 字幕翻译兜底（双语字幕）：没有 LLM 时用 Google 免费翻译
+deep-translator>=1.11.0   # 双语字幕翻译的免费后端（推荐装）
+# madmom>=0.16.1            # 更精确的节拍检测（需要编译）
+# celery[redis]>=5.3.0      # 异步任务队列
+# redis>=4.6.0              # Redis客户端
+# sqlalchemy>=2.0.0         # 数据库ORM
+# asyncpg>=0.28.0           # PostgreSQL异步驱动

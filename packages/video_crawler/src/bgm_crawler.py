@@ -1,0 +1,374 @@
+"""
+BGM 爬虫 - 搜索并下载背景音乐
+
+支持：
+- B站音频搜索 + 提取 MP3（主力，国内可用）
+- YouTube Music / Free Music Archive 搜索（yt-dlp 回退）
+- 任意 URL 音频提取
+
+用法：
+    crawler = BgmCrawler()
+    path = crawler.search_and_download("epic cinematic BGM")
+    path = crawler.search_by_style("intense")  # 按风格自动搜索
+"""
+
+import html as html_lib
+import json
+import re
+import subprocess
+import time
+import uuid
+from pathlib import Path
+from typing import List, Optional
+from dataclasses import dataclass
+
+import requests
+
+
+@dataclass
+class BgmInfo:
+    """BGM 信息"""
+    bvid: str
+    title: str
+    duration: float  # 秒
+    url: str
+    author: str = ""
+
+
+# 风格 → 搜索关键词映射
+STYLE_KEYWORDS = {
+    "dynamic": [
+        "动感 BGM 纯音乐",
+        "节奏感 纯音乐 卡点",
+        "upbeat background music",
+        "energetic instrumental",
+        "电子音乐 节奏 卡点 BGM",
+        "流行 混剪 BGM 纯音乐",
+    ],
+    "calm": [
+        "舒缓 纯音乐 BGM",
+        "钢琴 轻音乐 背景音乐",
+        "calm piano background music",
+        "relaxing instrumental music",
+        "治愈系 纯音乐",
+        "ambient chill BGM",
+    ],
+    "intense": [
+        "高燃 BGM 纯音乐",
+        "史诗 音乐 战斗 BGM",
+        "epic cinematic music",
+        "intense action background music",
+        "燃向 混剪 音乐 纯音乐",
+        "trailer music epic",
+    ],
+}
+
+
+class BgmCrawler:
+    """BGM 爬虫"""
+
+    def __init__(self, cache_dir: str = "var/cache/bgm"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.session = requests.Session()
+        self.session.trust_env = False
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.bilibili.com/",
+            "Origin": "https://www.bilibili.com",
+        })
+
+    def search(self, keyword: str, max_results: int = 10) -> List[BgmInfo]:
+        """在 B站搜索 BGM/音乐，自动尝试多个关键词变体"""
+        # 生成搜索关键词变体
+        kw_lower = keyword.lower()
+        has_bgm = "bgm" in kw_lower or "音乐" in keyword
+        has_pure = "纯音乐" in keyword
+
+        search_variants = []
+        if has_bgm or has_pure:
+            search_variants.append(keyword)
+        else:
+            search_variants.append(f"{keyword} BGM")
+            search_variants.append(f"{keyword} 纯音乐")
+            search_variants.append(keyword)
+
+        for search_kw in search_variants:
+            print(f"  搜索 BGM: {search_kw}")
+            results = self._search_bilibili(search_kw, max_results * 3)
+            if results:
+                results.sort(key=lambda r: r.duration)
+                good = [r for r in results if 15 <= r.duration <= 600]
+                if good:
+                    print(f"  找到 {len(good)} 个 BGM")
+                    return good[:max_results]
+                print(f"  找到 {len(results)} 个 BGM（未过滤）")
+                return results[:max_results]
+            print(f"  未找到结果，尝试下一个关键词...")
+
+        print("  所有关键词均未找到 BGM")
+        return []
+
+    def search_by_style(self, style: str, max_results: int = 5) -> List[BgmInfo]:
+        """按风格自动搜索 BGM（遍历风格关键词直到找到）"""
+        keywords = STYLE_KEYWORDS.get(style, STYLE_KEYWORDS["dynamic"])
+
+        for kw in keywords:
+            print(f"  尝试关键词: {kw}")
+            results = self.search(kw, max_results=max_results)
+            if results:
+                return results
+            time.sleep(0.5)
+
+        return []
+
+    def _search_bilibili(self, keyword: str, page_size: int = 30) -> List[BgmInfo]:
+        """执行一次 B站搜索；API 返回空/风控时降级到搜索页 HTML。"""
+        api_url = "https://api.bilibili.com/x/web-interface/wbi/search/type"
+        if not self.session.cookies.get("buvid3"):
+            self.session.cookies.set("buvid3", uuid.uuid4().hex.upper() + "infoc")
+        params = {
+            "search_type": "video",
+            "keyword": keyword,
+            "page": 1,
+            "page_size": min(page_size, 50),
+            # 只搜 10 分钟以内，避免整场混剪/循环音乐把 BGM 结果挤掉
+            "duration": 1,
+        }
+
+        try:
+            resp = self.session.get(api_url, params=params, timeout=15)
+            data = resp.json()
+            if data.get("code") == 0:
+                results = self._parse_bgm_items(
+                    data.get("data", {}).get("result", []))
+                if results:
+                    return results
+        except Exception as e:
+            print(f"  搜索 API 出错: {e}")
+
+        # 风控时 API 会返回 v_voucher / 空 result；搜索页 HTML 仍带结果
+        return self._search_bilibili_html(keyword, page_size)
+
+    def _parse_bgm_items(self, video_list: List[dict]) -> List[BgmInfo]:
+        results = []
+        for v in video_list:
+            dur_str = v.get("duration", "0:00")
+            dur_sec = self._parse_duration(dur_str)
+            if dur_sec < 15 or dur_sec > 600:
+                continue
+            title = self._strip_html(v.get("title", ""))
+            if any(kw in title for kw in ["直播", "教程", "教学", "解说", "评测", "vlog"]):
+                continue
+            bvid = v.get("bvid", "")
+            if not bvid:
+                continue
+            results.append(BgmInfo(
+                bvid=bvid,
+                title=title,
+                duration=dur_sec,
+                url=f"https://www.bilibili.com/video/{bvid}",
+                author=v.get("author", ""),
+            ))
+        return results
+
+    def _search_bilibili_html(self, keyword: str, page_size: int = 30) -> List[BgmInfo]:
+        """从 search.bilibili.com 页面内嵌数据解析结果（API 风控兜底）。"""
+        try:
+            if not self.session.cookies.get("buvid3"):
+                self.session.get("https://www.bilibili.com/", timeout=15)
+            resp = self.session.get(
+                "https://search.bilibili.com/video",
+                params={"keyword": keyword, "duration": 1},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            text = resp.text
+        except Exception as e:
+            print(f"  搜索页兜底失败: {e}")
+            return []
+
+        matches = list(re.finditer(r'bvid:"(BV[0-9A-Za-z]+)"', text))
+        results: List[BgmInfo] = []
+        seen = set()
+        for i, m in enumerate(matches):
+            if len(results) >= page_size:
+                break
+            end = matches[i + 1].start() if i + 1 < len(matches) else m.start() + 6000
+            block = text[m.start():end]
+            tm = re.search(r'title:"((?:\\.|[^"\\])*)"', block)
+            dm = re.search(r'duration:"([0-9:]+)"', block)
+            if not dm:
+                continue
+            dur_sec = self._parse_duration(dm.group(1))
+            if dur_sec < 15 or dur_sec > 600:
+                continue
+            bvid = m.group(1)
+            if bvid in seen:
+                continue
+            title = ""
+            if tm:
+                try:
+                    title = json.loads('"' + tm.group(1) + '"')
+                except Exception:
+                    title = tm.group(1)
+            title = html_lib.unescape(self._strip_html(title))
+            if not title or any(kw in title for kw in ["直播", "教程", "教学", "解说", "评测", "vlog"]):
+                continue
+            seen.add(bvid)
+            results.append(BgmInfo(
+                bvid=bvid, title=title, duration=dur_sec,
+                url=f"https://www.bilibili.com/video/{bvid}",
+            ))
+        return results
+
+    def search_and_download(self, keyword: str, max_clips: int = 1) -> List[str]:
+        """搜索并下载 BGM（返回 MP3 路径列表）"""
+        print(f"\n{'='*50}")
+        print(f"BGM 搜索下载: {keyword}")
+        print(f"{'='*50}")
+
+        bgms = self.search(keyword, max_results=max_clips * 3)
+        if not bgms:
+            print("  未找到 BGM")
+            return []
+
+        downloaded = []
+        for i, bgm in enumerate(bgms):
+            if len(downloaded) >= max_clips:
+                break
+
+            cache_path = self.cache_dir / f"{bgm.bvid}.mp3"
+
+            if cache_path.exists():
+                print(f"  [{i+1}] 已缓存: {bgm.title[:40]}")
+                downloaded.append(str(cache_path))
+                continue
+
+            print(f"  [{i+1}] 下载: {bgm.title[:40]}... ({self._format_dur(bgm.duration)})")
+            path = self._extract_audio(bgm.url, str(cache_path))
+            if path:
+                downloaded.append(path)
+                print(f"       -> {Path(path).name}")
+            time.sleep(1)
+
+        print(f"  下载完成: {len(downloaded)} 个 BGM")
+        return downloaded
+
+    def search_and_download_by_style(self, style: str, max_clips: int = 1) -> List[str]:
+        """按风格搜索并下载 BGM"""
+        print(f"\n{'='*50}")
+        print(f"BGM 搜索下载 (风格: {style})")
+        print(f"{'='*50}")
+
+        bgms = self.search_by_style(style, max_results=max_clips * 3)
+        if not bgms:
+            print("  未找到 BGM")
+            return []
+
+        downloaded = []
+        for i, bgm in enumerate(bgms):
+            if len(downloaded) >= max_clips:
+                break
+
+            cache_path = self.cache_dir / f"{bgm.bvid}.mp3"
+
+            if cache_path.exists():
+                print(f"  [{i+1}] 已缓存: {bgm.title[:40]}")
+                downloaded.append(str(cache_path))
+                continue
+
+            print(f"  [{i+1}] 下载: {bgm.title[:40]}... ({self._format_dur(bgm.duration)})")
+            path = self._extract_audio(bgm.url, str(cache_path))
+            if path:
+                downloaded.append(path)
+                print(f"       -> {Path(path).name}")
+            time.sleep(1)
+
+        print(f"  下载完成: {len(downloaded)} 个 BGM")
+        return downloaded
+
+    def download_url(self, url: str) -> Optional[str]:
+        """从任意 URL 提取音频（yt-dlp 支持的站点均可）"""
+        import hashlib
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
+        cache_path = self.cache_dir / f"url_{url_hash}.mp3"
+
+        if cache_path.exists():
+            print(f"  已缓存: {cache_path.name}")
+            return str(cache_path)
+
+        print(f"  提取音频: {url[:60]}...")
+        return self._extract_audio(url, str(cache_path))
+
+    def _extract_audio(self, url: str, output_path: str) -> Optional[str]:
+        """提取音频为 MP3：B 站先走 playurl API，其他站点走 yt-dlp。"""
+        if "bilibili.com/video/" in url:
+            try:
+                from .bilibili_crawler import BilibiliCrawler
+                src = Path(output_path).with_name(Path(output_path).stem + "_src.mp4")
+                got = BilibiliCrawler().download_video(url, str(src))
+                if got and Path(got).exists():
+                    r = subprocess.run(
+                        ["ffmpeg", "-y", "-v", "error", "-i", got, "-vn",
+                         "-c:a", "libmp3lame", "-q:a", "2", output_path],
+                        capture_output=True,
+                    )
+                    Path(got).unlink(missing_ok=True)
+                    if r.returncode == 0 and Path(output_path).exists():
+                        return output_path
+                    print("       B站音频转码失败，回退 yt-dlp")
+            except Exception as e:
+                print(f"       B站音频提取失败，回退 yt-dlp: {e}")
+
+        cmd = [
+            "yt-dlp", "--js-runtimes", "node",
+            "-x", "--audio-format", "mp3",
+            "--audio-quality", "0",
+            "-o", output_path,
+            "--no-playlist",
+            "--no-post-overwrites",
+            url,
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0 and Path(output_path).exists():
+                return output_path
+
+            mp3_path = Path(output_path).with_suffix(".mp3")
+            if mp3_path.exists():
+                return str(mp3_path)
+
+            stderr = result.stderr[:200] if result.stderr else ""
+            print(f"       提取失败: {stderr}")
+            return None
+        except subprocess.TimeoutExpired:
+            print("       提取超时")
+            return None
+        except FileNotFoundError:
+            print("       yt-dlp 未安装")
+            return None
+
+    @staticmethod
+    def _parse_duration(dur_str: str) -> float:
+        parts = dur_str.split(":")
+        try:
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            elif len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            return 0.0
+        except (ValueError, IndexError):
+            return 0.0
+
+    @staticmethod
+    def _format_dur(seconds: float) -> str:
+        m, s = divmod(int(seconds), 60)
+        return f"{m}:{s:02d}"
+
+    @staticmethod
+    def _strip_html(text: str) -> str:
+        return re.sub(r'<[^>]+>', '', text)

@@ -1,0 +1,1309 @@
+"""
+WebUI 模块 - FastAPI + HTML 前端
+
+功能：
+- 关键词输入 → 选源 → 上传BGM → 选风格/质量/比例 → 提交 → 进度 → 下载
+- 支持本地视频上传和在线搜索
+- SSE 实时进度推送
+"""
+
+import asyncio
+import json
+import os
+import shutil
+import subprocess
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import List, Optional
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+
+from packages.montage.paths import CACHE_DIR, OUTPUT_DIR, UPLOAD_DIR
+from packages.task_queue import get_store, get_worker
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _store():
+    """持久化任务表（SQLite）。进程重启后任务不丢。"""
+    return get_store()
+
+
+def _with_cache_gc(handler):
+    """每个任务跑完（成功或失败）都在后台收一次缓存，不阻塞任务线程。"""
+    def _wrapped(task_id: str, payload: dict):
+        try:
+            return handler(task_id, payload)
+        finally:
+            try:
+                from packages.montage.cache_gc import schedule_cleanup
+
+                schedule_cleanup()
+            except Exception:
+                pass
+
+    return _wrapped
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """启动任务 worker（会先续跑上次进程残留的任务），退出时优雅停止。"""
+    worker = get_worker()
+    worker.register("montage", _with_cache_gc(_run_montage_task))
+    worker.register("materials", _with_cache_gc(_run_materials_task))
+    worker.start()
+    # 启动时先收一次历史缓存：C 盘紧的时候别等下一个任务跑完才腾地方
+    try:
+        from packages.montage.cache_gc import schedule_cleanup
+
+        schedule_cleanup()
+    except Exception:
+        pass
+    try:
+        yield
+    finally:
+        worker.stop()
+
+
+app = FastAPI(title="AI Montage Agent", version="1.0.0", lifespan=_lifespan)
+
+
+# 任务载荷默认值（与 /api/montage 的提交字段一一对应）
+_TASK_DEFAULTS = {
+    "video_paths": [], "bgm_path": None, "bgm_query": None, "style": "dynamic",
+    "output_name": "final.mp4", "query": None, "source": "playphrase",
+    "sources": [],
+    "clip_limit": 20, "color_preset": None, "stabilize": False,
+    "aspect_ratio": "16/9", "enable_subtitles": False, "subtitle_style": "tiktok",
+    "subtitle_lang": "auto", "subtitle_mode": "mono", "translate_lang": "", "color_grade": "auto",
+    "subtitle_size": 0, "subtitle_color": "", "subtitle_position": "auto",
+    # 字幕画幅自适应：auto=跟随成片真实分辨率；也可强制 16:9 / 9:16 / 1:1 等
+    "subtitle_aspect": "auto",
+    # 字幕大小档位：auto/small/normal/large/xlarge（在画幅缩放基础上再乘倍率）
+    "subtitle_fit": "auto",
+    # 字幕文字来源：auto=有歌词就用歌词；asr=强制语音识别；lyrics=强制歌词对齐
+    "subtitle_source": "auto",
+    # 歌词文本（LRC 或纯文本）。留空且来源=lyrics 时，自动从 BGM 内嵌标签/同名 .lrc 拉取
+    "lyric_text": "",
+    # 歌词时间轴偏移（秒）；空=自动估计
+    "lyric_offset": "",
+    # 只给一遍歌词时自动补出重复演唱段：auto / off / 数字（最多补几遍）
+    "lyric_repeat": "auto",
+    # 古风 DJ / remix 版适配：auto=自动提纯人声+估变速+找原版映射；
+    # off=关闭；enhance=只提纯人声。dj_ratio 留空自动估计，也可手填 1.25 这类数值
+    "dj_mode": "auto",
+    "dj_ratio": "",
+    # 片尾音乐渐弱：auto=按成片时长自适应；off=不渐弱；数字=渐弱秒数
+    "bgm_fade_out": "auto",
+    "enable_ducking": False, "enable_harmonize": False, "enhance_options": [],
+    "enable_sfx": True,
+    "shot_density": "standard",
+    "prompt": "",
+    "target_duration": 0.0,
+    "threshold": 0.2,
+    "mute_source": False,
+    "clean_black": True,
+    "transition_pattern_id": "auto",
+    # 转场高级设置：时长（秒）/ 密度（0~1）/ 白闪点缀比例
+    "transition_length": 0.40,
+    "transition_density": 0.60,
+    "transition_flash": "auto",
+    # 配音旁白（可选）：一段人声音频，混进成片并在其区间自动压低 BGM
+    "narration_path": None,
+    "render_quality": "auto",
+    # 防抖：auto=跟随风格模板，true/false=用户显式指定
+    "enable_stabilize": "auto",
+}
+
+
+def _translation_ready(target: str) -> bool:
+    """探一下翻译后端是否真的可用（LLM 或 Google 兜底都行）。
+
+    双语字幕最容易"看起来成功、其实译文=原文"：翻译失败时 Translator 会
+    离线直通，不报错。这里用两个探针句判断是否真的翻译出来了。
+    探针带 10s 超时，避免翻译服务不通时把任务卡住。
+    """
+    probes = ["hello", "你好"]
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        from packages.subtitle_engine.src.translator import Translator
+
+        ex = ThreadPoolExecutor(max_workers=1)
+        try:
+            fut = ex.submit(lambda: Translator().translate(probes, target=target))
+            out = fut.result(timeout=10)
+        finally:
+            ex.shutdown(wait=False)
+    except Exception:
+        return False
+    for src, dst in zip(probes, out or []):
+        if str(dst or "").strip() and str(dst).strip().lower() != src.lower():
+            return True
+    return False
+
+
+def _build_source_list(query: str, source: str, sources) -> list:
+    source_list = sources or [source]
+    source_list = [s for s in dict.fromkeys(source_list) if s]
+    has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in (query or ""))
+    if has_cjk and "bilibili" in source_list:
+        source_list = ["bilibili"] + [s for s in source_list if s != "bilibili"]
+    return source_list
+
+
+def _crawl_sources(query: str, source_list: list, clip_limit: int,
+                   task=None, task_id: str = ""):
+    """按顺序尝试多个来源，返回 (下载路径, 尝试记录)。"""
+    has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in (query or ""))
+    video_paths = []
+    tried = []
+    for src in source_list:
+        if len(video_paths) >= clip_limit:
+            break
+        if has_cjk and src in ("playphrase", "quodb"):
+            tried.append(f"{src}:跳过")
+            continue
+        if src == "quodb":
+            tried.append("quodb:仅元数据")
+            continue
+
+        if task is not None:
+            task["message"] = f"正在搜索 {query}（来源: {src}）..."
+            task["progress"] = 12
+        try:
+            if src == "playphrase":
+                from packages.video_crawler.src.quote_crawler import create_quote_crawler
+                crawler = create_quote_crawler(src)
+                if task is not None:
+                    task["message"] = "正在启动浏览器搜索 PlayPhrase...首次可能较慢"
+            elif src == "bilibili":
+                from packages.video_crawler.src.bilibili_crawler import BilibiliCrawler
+                crawler = BilibiliCrawler()
+                if task is not None:
+                    task["message"] = "正在搜索 B站视频..."
+            elif src == "youtube":
+                from packages.video_crawler.src.ytdlp_crawler import YtdlpCrawler
+                crawler = YtdlpCrawler("youtube")
+                if task is not None:
+                    task["message"] = "正在搜索 YouTube（需要代理）..."
+            elif src == "dailymotion":
+                from packages.video_crawler.src.ytdlp_crawler import YtdlpCrawler
+                crawler = YtdlpCrawler("dailymotion")
+                if task is not None:
+                    task["message"] = "正在搜索 Dailymotion..."
+            else:
+                from packages.video_crawler.src.ytdlp_crawler import create_crawler
+                crawler = create_crawler(src)
+                if task is not None:
+                    task["message"] = f"正在搜索 {src}..."
+
+            remaining = max(1, clip_limit - len(video_paths))
+            paths = crawler.search_and_download(query, max_clips=remaining)
+            tried.append(f"{src}:{len(paths or [])}")
+            for path in paths or []:
+                if path not in video_paths:
+                    video_paths.append(path)
+                if len(video_paths) >= clip_limit:
+                    break
+            if video_paths:
+                break
+        except Exception as e:
+            print(f"[Crawler Error] task={task_id}, source={src}: {e}")
+            tried.append(f"{src}:失败")
+            continue
+    return video_paths, tried
+
+
+def _run_montage_task(task_id: str, params: dict):
+    """执行完整流程：搜索下载 → pipeline → 后处理（由任务队列 worker 调用）。
+
+    失败时**抛出异常**而不是吞掉，队列才能按退避策略重试；
+    "搜不到素材 / 参数不对"这类确定性失败抛 `TaskError(retryable=False)`，
+    不浪费重试次数。
+    """
+    import sys
+    import traceback
+    from packages.task_queue import TaskError
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from pipeline import MontagePipeline
+
+    p = {**_TASK_DEFAULTS, **(params or {})}
+    video_paths = p["video_paths"] or []
+    bgm_path = p["bgm_path"]
+    bgm_query = p["bgm_query"]
+    style = p["style"]
+    output_name = p["output_name"]
+    query = p["query"]
+    source = p["source"]
+    clip_limit = p["clip_limit"]
+    color_preset = p["color_preset"]
+    stabilize = p["stabilize"]
+    aspect_ratio = p["aspect_ratio"]
+    enable_subtitles = p["enable_subtitles"]
+    subtitle_style = p["subtitle_style"]
+    subtitle_lang = p["subtitle_lang"]
+    # 单语 / 双语：旧任务载荷没有这个字段时按"有翻译目标=双语"推断，保持兼容
+    subtitle_mode = (p.get("subtitle_mode") or "").lower()
+    translate_lang = p["translate_lang"]
+    if subtitle_mode not in ("mono", "bilingual"):
+        subtitle_mode = "bilingual" if (translate_lang or subtitle_style == "bilingual") else "mono"
+    color_grade = p["color_grade"]
+    enable_ducking = p["enable_ducking"]
+    enable_harmonize = p["enable_harmonize"]
+    enable_sfx = p.get("enable_sfx", True)
+    shot_density = p.get("shot_density", "standard")
+    prompt = p.get("prompt", "")
+    target_duration = float(p.get("target_duration") or 0.0)
+    threshold = float(p.get("threshold", 0.2))
+    mute_source = bool(p.get("mute_source", False))
+    clean_black = bool(p.get("clean_black", True))
+    enhance_options = p["enhance_options"] or []
+    transition_pattern_id = p.get("transition_pattern_id") or "auto"
+
+    def _num_or(value, default, low, high):
+        try:
+            return max(low, min(high, float(value)))
+        except (TypeError, ValueError):
+            return default
+
+    # 高级设置里的转场细项。旧任务载荷没有这些字段时用推荐默认值，
+    # 不会因为 SQLite 里存着的老任务而报错。
+    transition_length = _num_or(p.get("transition_length"), 0.40, 0.05, 0.80)
+    transition_density = _num_or(p.get("transition_density"), 0.60, 0.0, 1.0)
+    transition_flash = str(p.get("transition_flash") or "auto").strip().lower()
+    narration_path = p.get("narration_path") or None
+    subtitle_size = int(p.get("subtitle_size") or 0)
+    subtitle_color = (p.get("subtitle_color") or "").strip()
+    subtitle_position = (p.get("subtitle_position") or "auto").strip() or "auto"
+    subtitle_aspect = (p.get("subtitle_aspect") or "auto").strip() or "auto"
+    subtitle_fit = (p.get("subtitle_fit") or "auto").strip().lower() or "auto"
+    # 字幕来源与歌词：歌词场景不必赌 whisper 能不能听清唱词
+    subtitle_source = (p.get("subtitle_source") or "auto").strip().lower()
+    lyric_text = (p.get("lyric_text") or "").strip()
+    lyric_repeat = (p.get("lyric_repeat") or "auto").strip().lower()
+    bgm_fade_out = (p.get("bgm_fade_out") or "auto").strip().lower()
+    dj_mode = (p.get("dj_mode") or "auto").strip().lower()
+    dj_ratio = None
+    dj_ratio_raw = str(p.get("dj_ratio") or "").strip()
+    if dj_ratio_raw:
+        try:
+            v = float(dj_ratio_raw)
+            if 0.5 <= v <= 2.5:
+                dj_ratio = v
+            # 超出合理范围就当作没填，交给自动估计
+        except ValueError:
+            pass
+    # 上传的原版 BGM 是 DJ 对齐最可靠的基准；找不到/是重混版时 lyric 层会自动
+    # 去 uploads、Music 里搜同名原曲，用户无需填路径。
+    dj_ref = str(bgm_path) if bgm_path else ""
+    lyric_offset_raw = str(p.get("lyric_offset") or "").strip()
+    lyric_offset = None
+    if lyric_offset_raw:
+        try:
+            lyric_offset = float(lyric_offset_raw)
+        except ValueError:
+            lyric_offset = None
+    enable_stabilize = str(p.get("enable_stabilize") or "auto").lower()
+    # 输出画质：auto=按素材自适应（1080p 素材就出 1080p），
+    # 也可以强制 720p / 1080p / 1440p / 4k
+    render_quality = str(p.get("render_quality") or "auto").lower()
+
+    task = _store().handle(task_id)
+    warnings: List[str] = []
+
+    def warn(msg: str):
+        """非致命问题记进 task.warnings（前端会显示），不再静默跳过。"""
+        warnings.append(msg)
+        task["warnings"] = list(warnings)
+        print(f"[警告] {msg}")
+
+    def step(task_label: str, fn):
+        """执行一个后处理步骤：失败不中断流程，但必须留下原因。"""
+        try:
+            return fn()
+        except Exception as e:
+            warn(f"{task_label}失败：{type(e).__name__}: {e}")
+            return None
+    try:
+        # ===== 阶段 1：BGM 搜索下载 =====
+        if bgm_query:
+            task["status"] = "running"
+            task["progress"] = 3
+            task["message"] = f"正在搜索 BGM: {bgm_query}..."
+            from packages.video_crawler.src.bgm_crawler import BgmCrawler
+            bgm_crawler = BgmCrawler()
+            bgm_paths = bgm_crawler.search_and_download(bgm_query, max_clips=1)
+            if not bgm_paths:
+                raise TaskError(f"未找到 BGM「{bgm_query}」，请换个关键词试试",
+                                retryable=False)
+            bgm_path = bgm_paths[0]
+            task["progress"] = 8
+            task["message"] = "BGM 下载完成 ✓"
+        elif not bgm_path:
+            raise TaskError("请提供 BGM 文件或搜索关键词", retryable=False)
+
+        # ===== 阶段 2：视频素材搜索下载 =====
+        if query:
+            task["status"] = "running"
+            task["progress"] = 10
+            task["message"] = f"正在搜索素材: {query}（来源: {source}）..."
+
+            source_list = _build_source_list(
+                query, source, p.get("sources") or [source])
+            video_paths, tried = _crawl_sources(
+                query, source_list, clip_limit, task=task, task_id=task_id)
+
+            if not video_paths:
+                has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in (query or ""))
+                if "bilibili" in source_list:
+                    hint = (f"已尝试: {', '.join(tried) or '无可用来源'}。"
+                            "B站也没有取到素材，请换关键词或稍后重试。")
+                elif has_cjk:
+                    hint = "中文关键词请勾选 B站；PlayPhrase/QuoDB 只适合英文台词。"
+                else:
+                    hint = f"已尝试: {', '.join(tried) or '无可用来源'}。请换关键词或素材来源。"
+                raise TaskError(
+                    f"搜索「{query}」未找到结果。{hint}", retryable=False)
+
+            task["progress"] = 25
+            task["message"] = f"素材下载完成，共 {len(video_paths)} 个片段 ✓"
+
+        if not video_paths:
+            raise TaskError("没有可用的视频文件，请检查搜索关键词", retryable=False)
+
+        # ===== 阶段 3：AI 混剪 pipeline =====
+        task["status"] = "running"
+        task["progress"] = 30
+        task["message"] = f"正在分析 {len(video_paths)} 个素材，检测镜头与节拍..."
+
+        # 一句话效果描述：只覆盖仍是默认值的参数，手动选择优先。
+        # **必须在算 reframe / 调色之前解析**，否则"竖屏""小红书"这类
+        # 由 prompt 改写 aspect_ratio 的指令不会生效（旧版的 bug）。
+        if prompt:
+            try:
+                from packages.ai_director.src.effect_prompt import parse_effect_prompt
+                effect = parse_effect_prompt(prompt)
+                if effect:
+                    if effect.get("style") and style == "dynamic":
+                        style = effect["style"]
+                    if effect.get("enable_sfx"):
+                        enable_sfx = True
+                    if effect.get("shot_density") and shot_density == "standard":
+                        shot_density = effect["shot_density"]
+                    if effect.get("threshold") and abs(threshold - 0.2) < 1e-6:
+                        threshold = float(effect["threshold"])
+                    if effect.get("target_duration") and not target_duration:
+                        target_duration = float(effect["target_duration"])
+                    if effect.get("mute_source_audio") is not None:
+                        mute_source = bool(effect["mute_source_audio"])
+                    if effect.get("clean_black"):
+                        clean_black = True
+                    if effect.get("aspect_ratio") and aspect_ratio == "16/9":
+                        aspect_ratio = effect["aspect_ratio"]
+                    task["message"] = f"效果解析: {effect}"
+            except Exception as e:
+                print(f"[Prompt] 解析失败（忽略）: {e}")
+
+        # 解析输出比例（放在 prompt 之后，才能吃到 prompt 改写的比例）
+        enable_reframe = (aspect_ratio != "16/9")
+        reframe_map = {"9/16": 9/16, "1/1": 1/1, "4/5": 4/5, "16/9": 16/9}
+        reframe_aspect = reframe_map.get(aspect_ratio, 9/16)
+
+        # 色彩分级三态：
+        #   auto / 空  -> 跟随风格模板（模板自带的 color_preset）
+        #   none       -> 显式关闭调色，同时不叠加 renderer 的"轻对比+暗角"
+        #   具体预设名 -> 用用户选的
+        grade_key = (color_grade or "auto").strip().lower()
+        if grade_key in ("auto", ""):
+            final_color_grade = color_preset
+            apply_look = None
+        elif grade_key == "none":
+            final_color_grade = None
+            apply_look = False
+        else:
+            final_color_grade = grade_key
+            apply_look = None
+
+        # 加载转场模板，并把高级设置的时长/密度/白闪一起带给规划器。
+        # 旧版 "auto" 直接传 None —— 模板选了等于没选，这是「只有快闪」的根因。
+        from packages.montage_engine.src.transition_patterns import get_pattern
+        trans_pattern = dict(get_pattern(transition_pattern_id))
+        trans_pattern["transition_length"] = transition_length
+        trans_pattern["transition_density"] = transition_density
+        trans_pattern["transition_flash"] = transition_flash
+
+        # 镜头密度 -> (min_shot_gap, max_per_video)
+        density_map = {
+            "standard": (1.0, 15),
+            "dense": (0.5, 25),
+            "max": (0.0, 40),
+        }
+        min_shot_gap, max_per_video = density_map.get(shot_density, (1.0, 15))
+
+        pipeline = MontagePipeline(cache_dir=str(CACHE_DIR), output_dir=str(OUTPUT_DIR))
+
+        def _on_pipeline_progress(pct: float, msg: str):
+            # pipeline 内部 0~100 → 任务总进度 30~85
+            task["progress"] = max(30, min(85, int(30 + pct * 0.55)))
+            if msg:
+                task["message"] = msg
+
+        # 素材分析时长交给 pipeline 自己算（见 MontagePipeline.run 里的 needed）：
+        # 短成片对"画面重复"最敏感，需要 6 倍素材；长成片里偶尔复用几乎看不出来，
+        # 倍数递减，避免 4K 素材分析几十分钟。
+        max_source = 0
+
+        _RENDER_SIZES = {
+            "720p": (1280, 720), "1080p": (1920, 1080),
+            "1440p": (2560, 1440), "4k": (3840, 2160), "2160p": (3840, 2160),
+        }
+        render_size = _RENDER_SIZES.get(render_quality) or None
+        if render_size:
+            task["message"] = f"输出画质: {render_quality}"
+
+        # ===== 歌词先于剪辑：拿到歌词的换句时刻，剪辑时让切点对着它 =====
+        # 只有「自带时间戳」的歌词（.lrc / 带时间的纯文本）能在这里用；
+        # 纯文本歌词要等成片音轨才能对齐，那是字幕阶段的事。
+        cut_hints = None
+        if enable_subtitles and subtitle_source in ("auto", "lyrics") and not lyric_text:
+            try:
+                from packages.subtitle_engine.src.lyrics import extract_lyrics_from_media
+                found, where = extract_lyrics_from_media(bgm_path)
+                if found:
+                    lyric_text = found
+                    print(f"  [歌词] 剪辑前已从 {where} 拉取到歌词")
+            except Exception as e:
+                print(f"  [歌词] 拉取失败: {e}")
+        if enable_subtitles and lyric_text and subtitle_source in ("auto", "lyrics"):
+            try:
+                from packages.subtitle_engine.src.lyrics import parse_lyrics
+                _lines = parse_lyrics(lyric_text)
+                if _lines and all(ln.start is not None for ln in _lines):
+                    cut_hints = [float(ln.start) for ln in _lines if ln.start]
+                    print(f"  [歌词] {len(cut_hints)} 个换句点交给剪辑做切点吸附")
+            except Exception as e:
+                print(f"  [歌词] 解析失败，跳过切点吸附: {e}")
+
+        result = pipeline.run(
+            video_paths, bgm_path, style, output_name,
+            threshold=threshold,
+            color_preset=final_color_grade,
+            apply_look=apply_look,
+            enable_reframe=enable_reframe,
+            reframe_aspect=reframe_aspect,
+            enable_ducking=enable_ducking,
+            enable_harmonize=enable_harmonize,
+            enable_sfx=enable_sfx,
+            min_shot_gap=min_shot_gap,
+            max_per_video=max_per_video,
+            clean_black=clean_black,
+            target_duration=target_duration or None,
+            mute_source_audio=mute_source,
+            transition_pattern=trans_pattern,
+            narration_audio=narration_path,
+            max_source_duration=max_source,
+            progress_callback=_on_pipeline_progress,
+            warning_callback=warn,
+            render_size=render_size,
+            cut_hints=cut_hints,
+            bgm_fade_out=bgm_fade_out,
+        )
+
+        # ===== 阶段 4：后处理 =====
+        import os
+
+        # 防抖：auto=跟随风格模板，true/false=用户在页面里显式指定
+        if enable_stabilize in ("true", "1", "on", "yes"):
+            do_stabilize = True
+        elif enable_stabilize in ("false", "0", "off", "no"):
+            do_stabilize = False
+        else:
+            do_stabilize = bool(stabilize)
+
+        if do_stabilize:
+            task["progress"] = 88
+            task["message"] = "正在应用视频防抖..."
+
+            def _do_stabilize():
+                from packages.video_enhancement.src.stabilizer import stabilize_video
+                temp_path = result + ".stab.mp4"
+                stabilize_video(result, temp_path)
+                if os.path.exists(temp_path):
+                    os.replace(temp_path, result)
+
+            step("视频防抖", _do_stabilize)
+
+        # 视频增强（降噪/锐化/胶片颗粒）
+        if enhance_options:
+            task["progress"] = 90
+            task["message"] = f"正在增强视频: {', '.join(enhance_options)}..."
+
+            def _do_enhance():
+                from packages.video_enhancement.src.enhancer import enhance_video
+                temp_path = result + ".enhanced.mp4"
+                enhance_video(result, temp_path, denoise="denoise" in enhance_options,
+                              sharpen="sharpen" in enhance_options, film_grain="grain" in enhance_options)
+                if os.path.exists(temp_path):
+                    os.replace(temp_path, result)
+
+            step("视频增强", _do_enhance)
+
+        # 字幕
+        if enable_subtitles:
+            task["progress"] = 93
+            bilingual_mode = subtitle_mode == "bilingual" or subtitle_style == "bilingual"
+            lang = None if subtitle_lang == "auto" else subtitle_lang
+            translate = translate_lang or None
+
+            # ---- 歌词：用户填的 > BGM 内嵌标签 > BGM 同名 .lrc ----
+            # 唱词场景最省事、最准的路径：文字早就有了，只缺时间，不该让
+            # whisper 去猜（它对唱腔的识别又慢、又容易整段空白）。
+            lyrics_text = lyric_text
+            lyric_src_note = "页面填写"
+            if not lyrics_text and subtitle_source in ("lyrics", "auto"):
+                try:
+                    from packages.subtitle_engine.src.lyrics import extract_lyrics_from_media
+                    found, where = extract_lyrics_from_media(bgm_path)
+                    if found:
+                        lyrics_text = found
+                        lyric_src_note = f"自动读取「{where}」"
+                        print(f"  [字幕] 已从 {where} 拉取歌词（{len(found)} 字）")
+                except Exception as e:
+                    print(f"  [字幕] 拉取歌词失败: {e}")
+
+            if subtitle_source == "lyrics" and not lyrics_text:
+                warn("选了「歌词字幕」但没提供歌词：可在页面粘贴歌词，"
+                     "或把同名 .lrc 放到 BGM 旁边。本次已退回语音识别。")
+                subtitle_source = "asr"
+            elif lyrics_text:
+                # 有词就用歌词为主（文字 100% 正确），识别只提供时间戳
+                if subtitle_source == "asr":
+                    print("  [字幕] 已提供歌词，但仍按「语音识别」处理")
+                else:
+                    subtitle_source = "lyrics"
+                    print(f"  [字幕] 歌词来源：{lyric_src_note}")
+
+            if bilingual_mode:
+                if not translate:
+                    # 没填目标语言：中文素材→英文，其它→中文（后端也会兜底推断）
+                    translate = "en" if (lang or "").startswith("zh") or lang is None else "zh"
+                task["message"] = f"正在生成双语字幕（翻译->{translate}）..."
+                if not _translation_ready(translate):
+                    reason = ""
+                    try:
+                        from packages.subtitle_engine.src.translator import get_last_error
+                        reason = (get_last_error() or "").strip()
+                    except Exception:
+                        pass
+                    hint = f"（原因：{reason[:160]}）" if reason else ""
+                    warn(f"翻译后端不可用（{translate}）{hint}：双语字幕的译文会与原文相同。"
+                         "可配置 OPENAI_API_BASE/KEY 用本地大模型翻译，或让 deep-translator 能联网；"
+                         "只想要一种语言时把「字幕语言」切成单语即可。")
+            else:
+                task["message"] = ("正在对齐歌词与画面..." if subtitle_source == "lyrics"
+                                   else "正在生成字幕（语音识别中，可能较慢）...")
+                translate = None
+
+            def _do_subtitles():
+                from packages.subtitle_engine.src.burn_pipeline import (
+                    get_last_report, transcribe_and_burn,
+                )
+                temp_path = result + ".subtitled.mp4"
+                transcribe_and_burn(
+                    result, style=subtitle_style, output_path=temp_path, language=lang,
+                    translate=translate,
+                    mode="bilingual" if bilingual_mode else "mono",
+                    fontsize=subtitle_size, fontcolor=subtitle_color,
+                    position=subtitle_position,
+                    lyrics=lyrics_text or None,
+                    lyrics_offset=lyric_offset,
+                    lyric_repeat=lyric_repeat,
+                    dj_mode=dj_mode, dj_ratio=dj_ratio, dj_ref=dj_ref,
+                    subtitle_source=subtitle_source,
+                    aspect=subtitle_aspect, fit=subtitle_fit,
+                )
+                # 把字幕来源/对齐质量回填给前端：用户一眼能判断"为什么字幕不准"
+                rep = get_last_report()
+                if rep:
+                    task["subtitle_report"] = rep
+                    if rep.get("source") == "lyrics":
+                        task["message"] = f"字幕完成：{rep.get('detail', '歌词对齐')}"
+                if os.path.exists(temp_path):
+                    os.replace(temp_path, result)
+                return rep
+
+            try:
+                rep = _do_subtitles() or {}
+                if rep.get("method") in ("spread", "uniform"):
+                    warn("歌词与画面没能逐句对上（识别结果和歌词差异太大），"
+                         "已按有声区间分段铺字，节奏可能偏；"
+                         "换成带时间戳的 .lrc 可以彻底避免这个问题。")
+                elif rep.get("source") == "asr" and rep.get("model_used") and \
+                        rep.get("model_used") not in ("base", None):
+                    warn(f"语音识别用的是 {rep['model_used']}（低规格模型没识别出内容，已自动升档）。")
+            except ImportError as e:
+                warn(f"字幕没加成：缺少语音识别依赖（pip install openai-whisper）：{e}")
+            except Exception as e:
+                msg = str(e)
+                if "没有字幕段" in msg or "no segment" in msg.lower():
+                    warn(f"字幕没加成：{msg}")
+                else:
+                    warn(f"字幕生成失败：{type(e).__name__}: {msg}")
+
+        # 记录成片真实分辨率/体积，前端结果区直接显示，
+        # 用户一眼能看出「页面预览糊」和「成片糊」是两回事
+        try:
+            from packages.montage.media import ffprobe_bin
+            _pr = subprocess.run(
+                [ffprobe_bin(), "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height",
+                 "-show_entries", "format=size,duration", "-of", "json", result],
+                capture_output=True, text=True)
+            _info = json.loads(_pr.stdout or "{}")
+            _st = (_info.get("streams") or [{}])[0]
+            _fm = _info.get("format") or {}
+            if _st.get("width"):
+                task["output_meta"] = {
+                    "width": int(_st["width"]),
+                    "height": int(_st["height"]),
+                    "size": int(_fm.get("size") or 0),
+                    "duration": float(_fm.get("duration") or 0),
+                }
+        except Exception:
+            pass
+
+        task["status"] = "done"
+        task["progress"] = 100
+        if warnings:
+            task["message"] = f"混剪完成（{len(warnings)} 条警告，见结果区）"
+        else:
+            task["message"] = "混剪完成!"
+        task["output_path"] = result
+
+    except TaskError as e:
+        # 确定性失败（素材搜不到 / 参数不对）：打一行日志即可，不必打整段堆栈
+        task["status"] = "error"
+        task["message"] = str(e)
+        print(f"[任务终止] task={task_id}: {e}")
+        raise
+    except Exception as e:
+        task["status"] = "error"
+        task["message"] = f"混剪失败: {str(e)}"
+        print(f"[Pipeline Error] task={task_id}")
+        traceback.print_exc()
+        raise
+
+
+def _run_materials_task(task_id: str, params: dict):
+    """只搜索/下载候选素材，不渲染，供用户挑选后再混剪。"""
+    from packages.montage.helpers import _probe_media_duration
+    from packages.task_queue import TaskError
+
+    p = {**_TASK_DEFAULTS, **(params or {})}
+    query = (p.get("query") or "").strip()
+    clip_limit = max(1, min(int(p.get("clip_limit") or 8), 30))
+    source = p.get("source") or "playphrase"
+    task = _store().handle(task_id)
+
+    if not query:
+        raise TaskError("请先输入搜索关键词", retryable=False)
+
+    task["status"] = "running"
+    task["progress"] = 10
+    task["message"] = f"正在搜索素材: {query}..."
+    source_list = _build_source_list(query, source, p.get("sources") or [source])
+    video_paths, tried = _crawl_sources(
+        query, source_list, clip_limit, task=task, task_id=task_id)
+
+    if not video_paths:
+        raise TaskError(
+            f"没有搜到素材（已尝试: {', '.join(tried) or '无可用来源'}）。",
+            retryable=False)
+
+    candidates = []
+    for path in video_paths:
+        pth = Path(path)
+        try:
+            duration = float(_probe_media_duration(path) or 0)
+        except Exception:
+            duration = 0.0
+        try:
+            size = pth.stat().st_size
+        except OSError:
+            size = 0
+        candidates.append({
+            "path": str(pth),
+            "name": pth.name,
+            "duration": round(duration, 2),
+            "size": size,
+            "selected": True,
+        })
+
+    task["result"] = {"candidates": candidates, "tried": tried}
+    task["progress"] = 100
+    task["message"] = f"找到 {len(candidates)} 个候选素材，可以挑选后混剪"
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    html_path = Path(__file__).parent / "index.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/styles")
+async def list_styles():
+    """获取可用风格模板列表"""
+    from packages.video_enhancement.src.style_templates import get_style_names
+    return get_style_names()
+
+
+@app.get("/api/transitions")
+async def list_transitions():
+    """获取可用转场模板列表"""
+    from packages.montage_engine.src.transition_patterns import list_patterns
+    return list_patterns()
+
+
+@app.get("/api/cache")
+def cache_status():
+    """查看 var/ 缓存占用、上限与磁盘剩余。"""
+    from packages.montage.cache_gc import (
+        usage, has_active_tasks, stale_tasks, recycle_bin_entries)
+
+    info = usage()
+    info["active_task"] = has_active_tasks()
+    recycled = recycle_bin_entries()
+    info["recycle_count"] = len(recycled)
+    info["recycle_gb"] = round(sum(e["size"] for e in recycled) / 1024 ** 3, 2)
+    stale = stale_tasks()
+    info["stale_tasks"] = [{"id": t["id"][:8], "status": t["status"],
+                            "idle_minutes": t["idle_minutes"]} for t in stale]
+    info["stale_count"] = len(stale)
+    info["blocked_by"] = ("running_task" if info["active_task"]
+                          else ("stale_task" if stale else ""))
+    return info
+
+
+@app.post("/api/cache/cleanup")
+def cache_cleanup(dry_run: str = Form("false"), force: str = Form("true"),
+                  allow_while_running: str = Form("false")):
+    """立即清理一次缓存（默认压到上限的 60%）。
+
+    清理前会先把「进程已退出但 status 仍是 running」的僵尸任务归档，
+    否则这条记录会一直挡住清理。dry_run=true 只给清单、不删也不改任务表。
+    """
+    from packages.montage.cache_gc import cleanup
+
+    def _flag(value, default: bool = False) -> bool:
+        # HTTP 请求时是字符串；被其它 Python 代码直接调用时可能拿到 Form 默认值对象
+        if isinstance(value, str):
+            return value.strip().lower() in ("true", "1", "yes", "on")
+        if isinstance(value, bool):
+            return value
+        return default
+
+    return cleanup(dry_run=_flag(dry_run), force=_flag(force, True),
+                   allow_while_running=_flag(allow_while_running))
+
+
+def _save_upload(upload: UploadFile, prefix: str = "") -> str:
+    """保存上传文件，并按内容去重。
+
+    旧版每次上传都用 uuid 起新名字，同一份 2G 素材传 8 次就白占 16G。
+    现在写入时顺带算 sha1，文件名用内容摘要：同一份素材重复上传直接复用
+    已有文件（删掉临时副本），不再新增磁盘占用。
+    """
+    import hashlib
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(upload.filename or "upload.bin").name
+    tmp = UPLOAD_DIR / f".tmp_{uuid.uuid4().hex[:12]}_{safe_name}"
+    digest = hashlib.sha1()
+    size = 0
+    try:
+        with open(tmp, "wb") as fh:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
+
+        tag = digest.hexdigest()[:16]
+        dest = UPLOAD_DIR / f"{prefix}{tag}_{safe_name}"
+        if dest.exists() and dest.stat().st_size == size:
+            tmp.unlink(missing_ok=True)
+            return str(dest)
+        if dest.exists():  # 极罕见：摘要相同但大小不同，别覆盖
+            dest = UPLOAD_DIR / f"{prefix}{tag}_{uuid.uuid4().hex[:8]}_{safe_name}"
+        tmp.replace(dest)
+        return str(dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@app.post("/api/upload/video")
+async def upload_video(files: list[UploadFile] = File(...)):
+    """上传视频文件（同内容自动复用，不重复占盘）"""
+    return {"files": [_save_upload(f) for f in files]}
+
+
+@app.post("/api/upload/bgm")
+async def upload_bgm(file: UploadFile = File(...)):
+    """上传 BGM 文件"""
+    return {"path": _save_upload(file, "bgm_")}
+
+
+@app.post("/api/upload/narration")
+async def upload_narration(file: UploadFile = File(...)):
+    """上传配音旁白（人声音频）。会混进成片，并在旁白区间自动压低 BGM。"""
+    return {"path": _save_upload(file, "narration_")}
+
+
+@app.post("/api/url/import")
+async def import_urls(
+    urls: str = Form(...),
+    max_clips: int = Form(8),
+):
+    """按视频直链导入素材（抖音/B站/西瓜/AcFun/Vimeo/YouTube 等）。
+
+    这些站点大多不支持关键词搜索，只能给 URL。下载后返回本地路径，
+    前端把它们加进候选素材列表，和搜索到的素材一样可勾选/删除。
+    """
+    raw = (urls or "").strip()
+    items: list = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                items = [str(u) for u in parsed]
+            elif isinstance(parsed, str):
+                items = [parsed]
+        except (TypeError, ValueError):
+            items = [line for line in raw.splitlines()]
+    items = [str(u).strip() for u in items if str(u).strip().startswith("http")]
+    items = list(dict.fromkeys(items))
+    if not items:
+        return {"error": "没有有效的视频链接（需 http/https 开头）"}
+
+    limit = max(1, min(int(max_clips or 8), 20))
+    items = items[:limit]
+    try:
+        from packages.video_crawler.src.ytdlp_crawler import YtdlpCrawler
+        crawler = YtdlpCrawler()
+        paths = crawler.download_urls(items, max_clips=limit)
+    except Exception as e:
+        return {"error": f"下载失败: {e}"}
+
+    if not paths:
+        return {"error": "链接没有下载成功（可能需要登录 cookies / 代理，或时长超出 10 分钟限制）"}
+
+    from packages.montage.helpers import _probe_media_duration
+    clips = []
+    for path in paths:
+        pth = Path(path)
+        try:
+            duration = float(_probe_media_duration(path) or 0)
+        except Exception:
+            duration = 0.0
+        try:
+            size = pth.stat().st_size
+        except OSError:
+            size = 0
+        clips.append({
+            "path": str(pth),
+            "name": pth.name,
+            "duration": round(duration, 2),
+            "size": size,
+            "selected": True,
+        })
+    return {"files": [c["path"] for c in clips], "clips": clips,
+            "failed": max(0, len(items) - len(clips))}
+
+
+@app.post("/api/materials")
+async def create_materials(
+    query: str = Form(...),
+    source: str = Form("playphrase"),
+    sources: Optional[str] = Form(None),
+    clip_limit: int = Form(8),
+):
+    """只搜索/下载候选素材，返回 task_id；用户挑选后再提交混剪。"""
+    allowed_sources = {
+        "playphrase", "quodb", "bilibili", "youtube", "dailymotion",
+        "douyin", "ixigua", "acfun", "vimeo", "yarn", "zhaotaici",
+    }
+    sources_list = []
+    if sources:
+        try:
+            parsed = json.loads(sources)
+            if isinstance(parsed, list):
+                sources_list = [str(s) for s in parsed if str(s) in allowed_sources]
+        except (TypeError, ValueError):
+            sources_list = []
+    if source in allowed_sources and source not in sources_list:
+        sources_list.insert(0, source)
+
+    task = _store().create(
+        kind="materials",
+        payload={
+            "query": query,
+            "source": source,
+            "sources": sources_list,
+            "clip_limit": max(1, min(int(clip_limit), 30)),
+        },
+        message="素材任务已创建，等待执行",
+    )
+    _store().enqueue(task["id"])
+    return {"task_id": task["id"]}
+
+
+@app.get("/api/media")
+def get_media(path: str):
+    """给候选素材卡片提供本地预览（限制在 var/ 运行目录内）。"""
+    p = Path(path).resolve()
+    roots = [CACHE_DIR.resolve(), UPLOAD_DIR.resolve(), OUTPUT_DIR.resolve()]
+    if not any(p.is_relative_to(root) for root in roots):
+        raise HTTPException(status_code=403, detail="forbidden path")
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="media not found")
+    return FileResponse(str(p), media_type="video/mp4")
+
+
+@app.post("/api/montage")
+async def create_montage(
+    video_paths: str = Form(...),        # JSON 数组字符串
+    bgm_path: Optional[str] = Form(None),
+    bgm_query: Optional[str] = Form(None),
+    style: str = Form("dynamic"),
+    style_preset: Optional[str] = Form(None),
+    output_name: str = Form("final.mp4"),
+    query: Optional[str] = Form(None),
+    source: str = Form("playphrase"),
+    sources: Optional[str] = Form(None),
+    clip_limit: int = Form(20),
+    # 高级设置
+    aspect_ratio: str = Form("16/9"),
+    enable_subtitles: str = Form("false"),
+    subtitle_style: str = Form("tiktok"),
+    subtitle_lang: str = Form("auto"),
+    subtitle_mode: str = Form("mono"),
+    translate_lang: str = Form(""),
+    subtitle_size: str = Form("0"),
+    subtitle_color: str = Form(""),
+    subtitle_position: str = Form("auto"),
+    subtitle_aspect: str = Form("auto"),
+    subtitle_fit: str = Form("auto"),
+    subtitle_source: str = Form("auto"),
+    lyric_text: str = Form(""),
+    lyric_offset: str = Form(""),
+    lyric_repeat: str = Form("auto"),
+    dj_mode: str = Form("auto"),
+    dj_ratio: str = Form(""),
+    bgm_fade_out: str = Form("auto"),
+    color_grade: str = Form("auto"),
+    enable_ducking: str = Form("false"),
+    enable_harmonize: str = Form("false"),
+    enable_sfx: str = Form("true"),
+    enable_stabilize: str = Form("auto"),
+    narration_path: Optional[str] = Form(None),
+    render_quality: str = Form("auto"),
+    shot_density: str = Form("standard"),
+    prompt: str = Form(""),
+    target_duration: str = Form("0"),
+    detect_threshold: str = Form("0.2"),
+    mute_source: str = Form("false"),
+    clean_black: str = Form("true"),
+    enhance_options: str = Form("[]"),
+    transition_pattern: str = Form("auto"),
+    transition_length: str = Form("0.40"),
+    transition_density: str = Form("0.60"),
+    transition_flash: str = Form("auto"),
+):
+    """创建混剪任务 — 落盘后立即返回 task_id，执行交给持久化任务队列。"""
+    # 解析本地上传的视频路径
+    video_paths_list = json.loads(video_paths) if video_paths else []
+
+    # 风格预设处理
+    color_preset = None
+    stabilize = False
+    if style_preset:
+        from packages.video_enhancement.src.style_templates import get_pipeline_params
+        preset_params = get_pipeline_params(style_preset)
+        style = preset_params.get("style", style)
+        color_preset = preset_params.get("color_preset")
+        stabilize = preset_params.get("stabilize", False)
+
+    allowed_sources = {
+        "playphrase", "quodb", "bilibili", "youtube", "dailymotion",
+        "douyin", "ixigua", "acfun", "vimeo", "yarn", "zhaotaici",
+    }
+    sources_list = []
+    if sources:
+        try:
+            parsed = json.loads(sources)
+            if isinstance(parsed, list):
+                sources_list = [str(s) for s in parsed if str(s) in allowed_sources]
+        except (TypeError, ValueError):
+            sources_list = []
+    if source in allowed_sources and source not in sources_list:
+        sources_list.insert(0, source)
+
+    payload = {
+        "video_paths": video_paths_list,
+        "bgm_path": bgm_path,
+        "bgm_query": bgm_query,
+        "style": style,
+        "output_name": output_name,
+        "query": query,
+        "source": source,
+        "sources": sources_list,
+        "clip_limit": clip_limit,
+        "color_preset": color_preset,
+        "stabilize": stabilize,
+        "aspect_ratio": aspect_ratio,
+        # 填了歌词就是要字幕（省得用户勾了歌词忘了勾字幕开关）
+        "enable_subtitles": enable_subtitles == "true" or bool((lyric_text or "").strip()),
+        "subtitle_style": subtitle_style,
+        "subtitle_lang": subtitle_lang,
+        "subtitle_mode": (subtitle_mode or "mono").lower(),
+        "translate_lang": translate_lang,
+        "subtitle_size": int(subtitle_size or 0),
+        "subtitle_color": subtitle_color or "",
+        "subtitle_position": subtitle_position or "auto",
+        "subtitle_aspect": (subtitle_aspect or "auto").strip(),
+        "subtitle_fit": (subtitle_fit or "auto").lower(),
+        "subtitle_source": (subtitle_source or "auto").lower(),
+        "lyric_text": (lyric_text or "").strip(),
+        "lyric_offset": (lyric_offset or "").strip(),
+        "lyric_repeat": (lyric_repeat or "auto").strip().lower(),
+        "dj_mode": (dj_mode or "auto").strip().lower(),
+        "dj_ratio": (dj_ratio or "").strip(),
+        "bgm_fade_out": (bgm_fade_out or "auto").strip().lower(),
+        "color_grade": color_grade or "auto",
+        "enable_ducking": enable_ducking == "true",
+        "enable_harmonize": enable_harmonize == "true",
+        "enable_sfx": enable_sfx == "true",
+        "enable_stabilize": enable_stabilize or "auto",
+        "narration_path": narration_path or None,
+        "render_quality": (render_quality or "auto").lower(),
+        "shot_density": shot_density,
+        "prompt": prompt,
+        "target_duration": float(target_duration or 0),
+        "threshold": float(detect_threshold or 0.2),
+        "mute_source": mute_source == "true",
+        "clean_black": clean_black == "true",
+        "enhance_options": json.loads(enhance_options) if enhance_options else [],
+        "transition_pattern_id": transition_pattern,
+        "transition_length": transition_length,
+        "transition_density": transition_density,
+        "transition_flash": transition_flash,
+    }
+
+    store = _store()
+    task = store.create("montage", payload, message="任务已创建，正在等待执行")
+    store.enqueue(task["id"])
+    return {"task_id": task["id"]}
+
+
+@app.get("/api/tasks")
+async def list_tasks(status: Optional[str] = None, limit: int = 50):
+    """列出任务（默认最近 50 条）。"""
+    tasks = _store().list(status=status, limit=limit)
+    return {"tasks": tasks, "stats": _store().stats()}
+
+
+def _require_done(task_id: str):
+    """取"已完成且有产物"的任务；否则返回 (None, 错误响应体)。"""
+    task = _store().get(task_id)
+    if task is None:
+        return None, {"error": "任务不存在"}
+    if task.get("status") != "done" or not task.get("output_path"):
+        return None, {"error": "任务未完成"}
+    return task, None
+
+
+@app.post("/api/task/{task_id}/retry")
+async def retry_task(task_id: str):
+    """手动重试一个失败/中断的任务。"""
+    store = _store()
+    if store.get(task_id) is None:
+        return {"error": "任务不存在"}
+    store.retry(task_id)
+    return {"status": "ok", "task": store.get(task_id)}
+
+
+@app.post("/api/task/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """取消任务（仅对未开始/排队中的有效）。"""
+    store = _store()
+    if store.get(task_id) is None:
+        return {"error": "任务不存在"}
+    store.cancel(task_id)
+    return {"status": "ok", "task": store.get(task_id)}
+
+
+@app.get("/api/task/{task_id}")
+async def get_task(task_id: str):
+    """查询任务状态"""
+    task = _store().get(task_id)
+    if task is None:
+        return {"error": "任务不存在"}
+    return task
+
+
+@app.get("/api/task/{task_id}/progress")
+async def task_progress(task_id: str):
+    """SSE 实时进度"""
+    store = _store()
+
+    async def event_generator():
+        while True:
+            task = store.get(task_id)
+            if task is None:
+                yield f"data: {json.dumps({'error': 'not found'})}\n\n"
+                break
+            yield f"data: {json.dumps(task, ensure_ascii=False)}\n\n"
+            # queued 可能是"失败后等待重试"，仍要继续推送
+            if task["status"] in ("done", "error", "canceled"):
+                break
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/api/download/{task_id}")
+async def download_result(task_id: str, inline: int = 0):
+    """下载结果视频。
+
+    ``inline=1`` 时按 inline 返回，浏览器直接在线播放原片
+    （用于结果区的「播放原片（不压缩）」，避免被压缩预览误导画质）。
+    """
+    task, err = _require_done(task_id)
+    if err:
+        return err
+    if inline:
+        return FileResponse(
+            task["output_path"], media_type="video/mp4",
+            headers={"Content-Disposition": "inline"},
+        )
+    return FileResponse(task["output_path"], media_type="video/mp4", filename="montage.mp4")
+
+
+# --------------------------------------------------------------- 预览相关
+@app.get("/api/task/{task_id}/proxy")
+async def task_proxy(task_id: str, width: int = 1280, crf: int = 24,
+                     max_duration: Optional[float] = None, refresh: int = 0):
+    """低码率代理视频（缓存）。用于前端秒开播放。"""
+    task, err = _require_done(task_id)
+    if err:
+        return err
+    try:
+        from .preview import get_proxy
+        info = get_proxy(task["output_path"], width=width, crf=crf,
+                         max_duration=max_duration, force=bool(refresh))
+        if info.get("path"):
+            _store().update(task_id, proxy={"path": info["path"], "info": info})
+        return {
+            "status": "ok",
+            "url": f"/api/task/{task_id}/proxy/video?width={width}&crf={crf}",
+            **info,
+        }
+    except Exception as e:
+        return {"error": f"代理生成失败: {e}"}
+
+
+@app.get("/api/task/{task_id}/proxy/video")
+async def task_proxy_video(task_id: str, width: int = 1280, crf: int = 24,
+                           max_duration: Optional[float] = None):
+    """直接返回代理视频文件（未生成则现场生成）。"""
+    task, err = _require_done(task_id)
+    if err:
+        return err
+    try:
+        from .preview import get_proxy
+        info = get_proxy(task["output_path"], width=width, crf=crf,
+                         max_duration=max_duration)
+    except Exception as e:
+        return {"error": f"代理生成失败: {e}"}
+    return FileResponse(info["path"], media_type="video/mp4", filename="preview.mp4")
+
+
+@app.post("/api/task/{task_id}/preview")
+async def create_param_preview(
+    task_id: str,
+    start: float = Form(0.0),
+    duration: float = Form(6.0),
+    color_grade: str = Form("none"),
+    subtitle_style: str = Form("none"),
+    width: int = Form(480),
+    crf: int = Form(32),
+):
+    """按当前参数快速渲染一小段预览（默认前 6 秒），用于"边调参边看"。"""
+    task, err = _require_done(task_id)
+    if err:
+        return err
+    try:
+        from .preview import get_param_preview
+        # 若任务侧已生成过字幕文件，则预览也带上字幕
+        sub_path = None
+        if subtitle_style and subtitle_style != "none":
+            cand = Path(task["output_path"]).with_suffix(".srt")
+            if cand.exists():
+                sub_path = str(cand)
+        info = get_param_preview(
+            task["output_path"], start=start, duration=duration, width=width,
+            crf=crf, color_preset=None if color_grade in ("none", "", "auto") else color_grade,
+            subtitle_path=sub_path,
+        )
+        previews = list(task.get("previews") or [])
+        pid = f"p{len(previews) + 1}"
+        previews.append({"id": pid, **info, "params": {
+            "start": start, "duration": duration, "color_grade": color_grade,
+            "subtitle_style": subtitle_style}})
+        _store().update(task_id, previews=previews)
+        return {
+            "status": "ok", "preview_id": pid,
+            "url": f"/api/task/{task_id}/preview/{pid}",
+            **info,
+        }
+    except Exception as e:
+        return {"error": f"预览生成失败: {e}"}
+
+
+@app.get("/api/task/{task_id}/preview/{preview_id}")
+async def get_param_preview_file(task_id: str, preview_id: str):
+    """取回参数预览文件。"""
+    task = _store().get(task_id)
+    if task is None:
+        return {"error": "任务不存在"}
+    for p in task.get("previews") or []:
+        if p["id"] == preview_id and Path(p["path"]).exists():
+            return FileResponse(p["path"], media_type="video/mp4", filename="preview.mp4")
+    return {"error": "预览不存在"}
+
+
+@app.post("/api/preview/clear")
+async def clear_preview_cache():
+    """清空预览缓存。"""
+    try:
+        from .preview import clear_cache
+        n = clear_cache()
+        return {"status": "ok", "removed": n}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def start_webui(host: str = "0.0.0.0", port: int = 8000):
+    """启动 WebUI"""
+    import uvicorn
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    start_webui()

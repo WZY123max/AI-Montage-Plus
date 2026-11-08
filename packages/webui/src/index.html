@@ -1,0 +1,2645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Montage Agent</title>
+    <style>
+
+/* ==========================================================================
+   AI Montage Agent - Tech Console UI
+   深色科技风（可一键切浅色科技），只重写视觉层，所有 id / class / 交互不变
+   ========================================================================== */
+
+:root {
+    color-scheme: dark;
+    --bg: #060a13;
+    --bg-2: #0a1120;
+    --panel: rgba(13, 22, 38, .78);
+    --panel-2: rgba(20, 32, 54, .55);
+    --panel-3: rgba(6, 12, 24, .72);
+    --line: rgba(86, 166, 220, .20);
+    --line-strong: rgba(56, 189, 248, .52);
+    --text: #e7f2ff;
+    --muted: #9db4d4;
+    --dim: #6b83a6;
+    --cyan: #2ad4ee;
+    --purple: #9b6cff;
+    --pink: #ff7ab6;
+    --green: #43e2a0;
+    --amber: #ffc46b;
+    --accent: linear-gradient(105deg, #2ad4ee 0%, #5b8cff 48%, #a46bff 100%);
+    --accent-soft: linear-gradient(105deg, rgba(42, 212, 238, .20), rgba(164, 107, 255, .20));
+    --glow: 0 0 22px rgba(42, 212, 238, .28);
+    --shadow: 0 14px 40px rgba(0, 0, 0, .42);
+    --grid: rgba(86, 166, 220, .055);
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    --sans: "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.theme-light {
+    color-scheme: light;
+    --bg: #eef4fb;
+    --bg-2: #e3edf8;
+    --panel: rgba(255, 255, 255, .86);
+    --panel-2: rgba(233, 242, 252, .82);
+    --panel-3: rgba(255, 255, 255, .92);
+    --line: rgba(37, 99, 160, .18);
+    --line-strong: rgba(30, 130, 190, .52);
+    --text: #10243c;
+    --muted: #496384;
+    --dim: #6d86a5;
+    --cyan: #0a9dc4;
+    --purple: #7350d8;
+    --pink: #d9508f;
+    --green: #159c6b;
+    --amber: #a96f10;
+    --accent: linear-gradient(105deg, #12b6df 0%, #3d72e8 48%, #8a5ae6 100%);
+    --accent-soft: linear-gradient(105deg, rgba(18, 182, 223, .16), rgba(138, 90, 230, .16));
+    --glow: 0 0 20px rgba(18, 158, 200, .18);
+    --shadow: 0 12px 30px rgba(31, 66, 110, .12);
+    --grid: rgba(37, 99, 160, .06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: var(--sans);
+    background-color: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+    background-image:
+        radial-gradient(900px 520px at 12% -8%, rgba(42, 212, 238, .11), transparent 62%),
+        radial-gradient(820px 520px at 92% 4%, rgba(155, 108, 255, .11), transparent 62%),
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: auto, auto, 44px 44px, 44px 44px;
+    background-attachment: fixed;
+}
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 4px);
+    opacity: .55;
+}
+::selection { background: rgba(42, 212, 238, .32); color: var(--text); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-2); }
+::-webkit-scrollbar-thumb { background: rgba(86, 166, 220, .32); border-radius: 8px; border: 2px solid var(--bg-2); }
+::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+.container { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; position: relative; z-index: 1; }
+
+/* ===== 顶部控制台标题 ===== */
+.header {
+    text-align: center;
+    margin-bottom: 26px;
+    padding: 26px 22px 22px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
+    backdrop-filter: blur(14px);
+    position: relative;
+    overflow: hidden;
+}
+.header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 8%; right: 8%; height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 16px rgba(42, 212, 238, .7);
+}
+.header::after {
+    content: '';
+    position: absolute;
+    width: 340px; height: 340px;
+    top: -220px; right: -110px;
+    background: radial-gradient(circle, rgba(155, 108, 255, .20), transparent 68%);
+    pointer-events: none;
+}
+.header h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.7em, 4.4vw, 2.5em);
+    font-weight: 800;
+    letter-spacing: 5px;
+    background: linear-gradient(92deg, #6ee7ff 0%, #7ea8ff 45%, #c79bff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(42, 212, 238, .28));
+    position: relative;
+}
+body.theme-light .header h1 {
+    background: linear-gradient(92deg, #0687ab 0%, #3a5fd8 50%, #7b45c9 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+.header .subtitle {
+    font-family: var(--mono);
+    font-size: .82em;
+    color: var(--muted);
+    margin-top: 8px;
+    letter-spacing: 1.5px;
+}
+.sys-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+    font-size: .70em;
+    letter-spacing: 1.1px;
+    color: var(--dim);
+    text-transform: uppercase;
+}
+.sys-tag { display: inline-flex; align-items: center; gap: 6px; }
+.sys-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    animation: pulse-dot 2.2s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.theme-btn {
+    font-family: var(--mono);
+    font-size: .95em;
+    padding: 4px 12px;
+    background: var(--panel-2);
+    color: var(--cyan);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: .6px;
+    transition: all .18s;
+}
+.theme-btn:hover { background: var(--accent-soft); box-shadow: var(--glow); }
+
+/* ===== 玻璃卡片 ===== */
+.card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+    position: relative;
+    backdrop-filter: blur(12px);
+    transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 22px;
+    width: 46px; height: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+}
+.card:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.card h2 {
+    font-size: 1.06em;
+    font-weight: 700;
+    margin-bottom: 18px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: .5px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+}
+.card h2 .num, .adv-toggle .num {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 27px !important;
+    height: 27px !important;
+    background: var(--accent) !important;
+    color: #04121e !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: .84em;
+    font-weight: 800;
+    box-shadow: var(--glow);
+    flex-shrink: 0;
+}
+/* 清掉旧版内联的粉色徽章 / 灰色提示，避免深色底上看不清 */
+[style*="background:#FB7299"] {
+    background: var(--accent) !important;
+    color: #04121e !important;
+    border-color: transparent !important;
+}
+[style*="color:#777"], [style*="color:#888"], [style*="color:#999"],
+[style*="color:#666"], [style*="color:#6b4f0f"], [style*="color:#8a4b00"] {
+    color: var(--muted) !important;
+}
+[style*="background:#fff8e1"], [style*="background:#fff7e6"],
+[style*="background:#fafafa"] {
+    background: var(--panel-2) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--line) !important;
+}
+.hidden { display: none; }
+
+/* ===== 表单 ===== */
+.form-group { margin-bottom: 18px; }
+.form-group label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: .84em;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: .3px;
+}
+input[type="text"], input[type="number"], input[type="file"],
+select, textarea {
+    width: 100%;
+    padding: 10px 13px;
+    background: var(--panel-3);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--text);
+    font-size: .92em;
+    font-family: inherit;
+    transition: border-color .18s, box-shadow .18s;
+}
+textarea { resize: vertical; min-height: 82px; line-height: 1.6; }
+select { cursor: pointer; }
+input::placeholder, textarea::placeholder { color: var(--dim); }
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(42, 212, 238, .14), var(--glow);
+}
+input[type="checkbox"] { accent-color: var(--cyan); }
+.hint { font-size: .78em; color: var(--dim); margin-top: 8px; line-height: 1.65; }
+.adv-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.adv-row .field { display: flex; flex-direction: column; gap: 6px; }
+.adv-row .field span {
+    font-family: var(--mono);
+    font-size: .70em;
+    color: var(--dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.tech-note {
+    font-family: var(--mono);
+    font-size: .74em;
+    color: var(--cyan);
+    letter-spacing: .5px;
+    padding: 8px 12px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 9px;
+    background: rgba(42, 212, 238, .05);
+    margin-top: 10px;
+}
+
+/* ===== 文件上传 ===== */
+.file-upload { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.file-upload input[type="file"] { display: none; }
+.file-upload label {
+    padding: 12px 20px;
+    background: var(--panel-2);
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+    flex: 1;
+    min-width: 200px;
+    font-weight: 600;
+    font-size: .88em;
+    color: var(--cyan);
+    transition: all .18s;
+}
+.file-upload label:hover { background: var(--accent-soft); box-shadow: var(--glow); }
+.file-upload .file-name {
+    font-size: .80em;
+    color: var(--dim) !important;
+    min-width: 100px;
+    font-weight: 400;
+    font-family: var(--mono);
+}
+
+/* ===== Tab ===== */
+.tab-group {
+    display: inline-flex;
+    gap: 4px;
+    margin-bottom: 18px;
+    padding: 4px;
+    background: var(--panel-3);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+}
+.tab {
+    padding: 9px 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .86em;
+    font-weight: 700;
+    color: var(--muted);
+    transition: all .18s;
+    position: relative;
+}
+.tab:first-child, .tab:last-child { border-radius: 8px; }
+.tab.active {
+    background: var(--accent);
+    color: #04121e;
+    box-shadow: var(--glow);
+    z-index: 1;
+}
+.tab:hover:not(.active) { color: var(--cyan); background: var(--panel-2); }
+
+/* ===== 素材来源表 ===== */
+.source-toggle, .adv-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: .92em;
+    color: var(--text);
+    margin-bottom: 0;
+    transition: all .18s;
+    user-select: none;
+}
+.source-toggle:hover, .adv-toggle:hover { border-color: var(--line-strong); box-shadow: var(--glow); }
+.source-toggle .arrow, .adv-toggle .arrow {
+    transition: transform .2s;
+    font-size: .8em;
+    color: var(--cyan);
+}
+.source-toggle.open .arrow, .adv-toggle.open .arrow { transform: rotate(180deg); }
+.source-toggle.open, .adv-toggle.open {
+    border-bottom-color: transparent;
+    border-radius: 10px 10px 0 0;
+}
+.source-table-wrap, .adv-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .4s ease, padding .3s ease;
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 12px 12px;
+    background: var(--panel-3);
+    padding: 0 16px;
+}
+.source-table-wrap.open { max-height: 620px; }
+.adv-panel.open { max-height: 4200px; padding: 18px 16px; }
+.adv-panel .form-group:last-child { margin-bottom: 0; }
+.source-table { width: 100%; border-collapse: collapse; font-size: .86em; }
+.source-table th {
+    background: rgba(42, 212, 238, .09);
+    color: var(--cyan);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: .82em;
+    letter-spacing: .5px;
+}
+.source-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+    color: var(--text);
+}
+.source-table tr:last-child td { border-bottom: none; }
+.source-table tr:hover td { background: rgba(42, 212, 238, .06); }
+.source-table tr.disabled td { opacity: .42; }
+.source-table tbody tr { cursor: pointer; }
+.source-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+.source-table .source-name { font-weight: 700; }
+
+.badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: .74em;
+    font-weight: 700;
+    border: 1px solid var(--line-strong);
+    font-family: var(--mono);
+}
+.badge-recommend { background: rgba(42, 212, 238, .16); color: var(--cyan); }
+.badge-ok { background: rgba(67, 226, 160, .14); color: var(--green); border-color: rgba(67, 226, 160, .4); }
+.badge-limited { background: rgba(255, 196, 107, .14); color: var(--amber); border-color: rgba(255, 196, 107, .4); }
+.badge-unavailable { background: var(--panel-2); color: var(--dim); border-color: var(--line); }
+.type-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    background: rgba(155, 108, 255, .16);
+    color: var(--purple);
+    border: 1px solid rgba(155, 108, 255, .38);
+    border-radius: 5px;
+    font-size: .76em;
+    font-weight: 700;
+    font-family: var(--mono);
+}
+
+/* ===== 选择卡片：风格 / 转场 / 比例 / 调色 / chips ===== */
+.style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.ratio-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.style-option, .trans-option, .ratio-option, .grade-option, .chip {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    cursor: pointer;
+    text-align: center;
+    transition: all .18s;
+    position: relative;
+    user-select: none;
+    border-radius: 10px;
+}
+.style-option { padding: 14px 8px; font-size: .84em; font-weight: 600; }
+.trans-option { padding: 9px 5px; font-size: .76em; font-weight: 600; }
+.ratio-option { flex: 1; min-width: 80px; padding: 10px 6px; font-size: .80em; font-weight: 600; }
+.grade-option { padding: 9px 5px; font-size: .74em; font-weight: 600; }
+.chip { padding: 7px 14px; border-radius: 999px; font-size: .80em; font-weight: 600; }
+.style-option:hover, .trans-option:hover, .ratio-option:hover,
+.grade-option:hover, .chip:hover {
+    border-color: var(--line-strong);
+    transform: translateY(-2px);
+    box-shadow: var(--glow);
+    color: var(--cyan);
+}
+.style-option.active, .trans-option.active, .ratio-option.active,
+.grade-option.active, .chip.active {
+    background: var(--accent-soft);
+    border-color: var(--cyan);
+    color: var(--text);
+    box-shadow: inset 0 0 18px rgba(42, 212, 238, .10), var(--glow);
+}
+.style-option.active::after, .trans-option.active::after,
+.ratio-option.active::after, .grade-option.active::after {
+    content: '';
+    position: absolute;
+    top: 5px; right: 6px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+}
+.style-option .style-icon { font-size: 1.6em; display: block; margin-bottom: 5px; }
+.style-option .style-name { display: block; line-height: 1.35; }
+.style-option .style-tag { display: block; font-size: .74em; font-weight: 400; opacity: .65; margin-top: 3px; }
+.trans-option .trans-icon { font-size: 1.2em; display: block; margin-bottom: 3px; }
+.ratio-option .ratio-icon { display: block; margin: 0 auto 5px; border: 1.5px solid currentColor; border-radius: 2px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+#transition-desc { color: var(--muted) !important; font-family: var(--mono); font-size: .74em !important; }
+
+/* ===== 开关 ===== */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; }
+.toggle-row label { margin-bottom: 0; }
+.toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--panel-3);
+    border: 1px solid var(--line-strong);
+    border-radius: 24px;
+    transition: .2s;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 3px; bottom: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: .2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); border-color: transparent; box-shadow: var(--glow); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); background: #04121e; }
+
+/* ===== 按钮 ===== */
+.btn {
+    padding: 14px 32px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    font-size: 1.02em;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all .18s;
+    font-family: inherit;
+    letter-spacing: 1.5px;
+}
+.btn-primary {
+    background: var(--accent);
+    color: #04121e;
+    width: 100%;
+    font-family: var(--mono);
+    box-shadow: 0 0 26px rgba(42, 212, 238, .26), var(--shadow);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 34px rgba(42, 212, 238, .45), var(--shadow); filter: brightness(1.07); }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:disabled { opacity: .42; cursor: not-allowed; transform: none; filter: grayscale(.4); }
+.btn-secondary { background: var(--panel-2); color: var(--cyan); }
+.btn-secondary:hover { background: var(--accent-soft); box-shadow: var(--glow); transform: translateY(-1px); }
+.btn-small { padding: 8px 14px; font-size: .82em; letter-spacing: 0; }
+.material-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.material-card {
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    padding: 9px;
+    border-radius: 12px;
+    transition: border-color .18s;
+}
+.material-card:hover { border-color: var(--line-strong); }
+.material-card video {
+    width: 100%; height: 130px;
+    object-fit: cover;
+    background: #000;
+    display: block;
+    margin-bottom: 7px;
+    border-radius: 8px;
+}
+.material-card .material-name { font-size: 13px; font-weight: 600; line-height: 1.35; max-height: 2.7em; overflow: hidden; }
+.material-card .material-meta { font-size: 12px; color: var(--dim); margin: 4px 0 7px; font-family: var(--mono); }
+.material-card .material-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.material-card .material-del {
+    border: 1px solid var(--line-strong);
+    background: var(--panel-3);
+    color: var(--pink);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 6px;
+}
+
+/* ===== 进度 ===== */
+.progress-container { display: none; }
+.progress-container.active {
+    display: block;
+    padding: 18px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+}
+.progress-bar {
+    width: 100%; height: 12px;
+    background: var(--panel-3);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 12px 0;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2ad4ee, #5b8cff 55%, #a46bff);
+    box-shadow: 0 0 16px rgba(42, 212, 238, .6);
+    transition: width .3s;
+    width: 0%;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .22) 25%, transparent 25%,
+        transparent 50%, rgba(255, 255, 255, .22) 50%, rgba(255, 255, 255, .22) 75%, transparent 75%);
+    background-size: 20px 20px;
+    animation: stripe-move .8s linear infinite;
+}
+@keyframes stripe-move { 0% { background-position: 0 0; } 100% { background-position: 20px 0; } }
+.progress-status { text-align: center; font-size: .88em; font-weight: 600; color: var(--cyan); font-family: var(--mono); }
+.progress-elapsed { text-align: center; font-size: .78em; color: var(--dim) !important; margin-top: 5px; font-family: var(--mono); }
+.progress-steps { display: flex; justify-content: center; gap: 7px; margin: 14px 0 8px; flex-wrap: wrap; }
+.step-item {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: .76em;
+    font-weight: 600;
+    color: var(--dim);
+    background: var(--panel-2);
+    transition: all .3s;
+    font-family: var(--mono);
+}
+.step-item.active { border-color: var(--cyan); color: var(--cyan); background: rgba(42, 212, 238, .10); box-shadow: var(--glow); }
+.step-item.done { border-color: var(--green); color: var(--green); background: rgba(67, 226, 160, .09); }
+.step-item .step-icon { font-size: 1em; }
+
+/* ===== 结果 ===== */
+.result { display: none; text-align: center; padding: 22px; }
+.result.active {
+    display: block;
+    background: var(--panel-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+}
+.result a {
+    color: var(--cyan);
+    text-decoration: none;
+    font-size: 1.12em;
+    font-weight: 800;
+    font-family: var(--mono);
+    border-bottom: 1px solid var(--cyan);
+    padding-bottom: 3px;
+}
+.result a:hover { color: var(--purple); border-color: var(--purple); }
+
+/* ===== 装饰 / 动画 ===== */
+.manga-burst {
+    position: absolute;
+    top: -8px; right: -8px;
+    background: var(--accent);
+    color: #04121e;
+    font-family: var(--mono);
+    font-size: .68em;
+    font-weight: 800;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transform: rotate(4deg);
+    z-index: 2;
+    box-shadow: var(--glow);
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 50%, 90% { transform: translateX(-4px); }
+    30%, 70% { transform: translateX(4px); }
+}
+.shake { animation: shake .4s ease; border-color: var(--pink) !important; box-shadow: 0 0 0 2px rgba(255, 122, 182, .3) !important; }
+.toast {
+    position: fixed;
+    top: 24px; left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--panel);
+    color: var(--text);
+    font-weight: 700;
+    font-size: .92em;
+    padding: 11px 26px;
+    border: 1px solid var(--cyan);
+    border-radius: 10px;
+    box-shadow: 0 0 28px rgba(42, 212, 238, .28), var(--shadow);
+    backdrop-filter: blur(12px);
+    z-index: 9999;
+    opacity: 0;
+    transition: all .3s ease;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 680px) {
+    .container { padding: 18px 12px 40px; }
+    .card { padding: 18px 15px; }
+    .header { padding: 22px 14px 18px; }
+    .header h1 { letter-spacing: 2px; }
+    .adv-row { grid-template-columns: 1fr; }
+    .tab { padding: 9px 14px; }
+    .sys-bar { gap: 9px; }
+}
+
+    </style>
+</head>
+<body>
+    <div class="toast" id="toast"></div>
+    <div class="container">
+        <!-- 标题 -->
+        <div class="header">
+            <div class="sys-bar">
+                <span class="sys-tag"><span class="sys-dot"></span> ENGINE ONLINE</span>
+                <span class="sys-tag">FFMPEG / WHISPER / BEAT-SYNC</span>
+                <span class="sys-tag" id="sys-clock">--:--:--</span>
+                <button type="button" class="theme-btn" id="theme-btn" onclick="toggleTechTheme()">◐ 浅色科技</button>
+            </div>
+            <h1>AI MONTAGE AGENT</h1>
+            <p class="subtitle">节拍驱动 · 歌词对齐 · 智能转场 // AUTOMATED VIDEO MONTAGE CONSOLE</p>
+        </div>
+
+        <!-- 1. 素材来源 -->
+        <div class="card">
+            <h2><span class="num">1</span> 素材来源</h2>
+
+            <div class="tab-group">
+                <div class="tab active" onclick="switchSource('search', this)">关键词搜索</div>
+                <div class="tab" onclick="switchSource('upload', this)">本地上传</div>
+            </div>
+
+            <!-- 本地上传 -->
+            <div id="upload-section" class="hidden">
+                <div class="form-group">
+                    <div class="file-upload">
+                        <label for="video-files">选择视频文件（可多选）</label>
+                        <input type="file" id="video-files" accept="video/*" multiple onchange="updateFileNames(this, 'video-names')">
+                        <span class="file-name" id="video-names">未选择文件</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 关键词搜索 -->
+            <div id="search-section">
+                <div class="form-group">
+                    <label>搜索关键词</label>
+                    <input type="text" id="search-query" placeholder="如：i love you / fight scene / 漫威混剪">
+                </div>
+                <div class="form-group">
+                    <label>最大下载数</label>
+                    <input type="number" id="clip-limit" value="8" min="1" max="100">
+                    <p style="font-size:12px;color:#777;margin-top:6px">
+                        建议 5～10 个；素材越多，镜头分析越久。
+                    </p>
+                </div>
+
+                <!-- 素材来源表格 -->
+                <div class="form-group">
+                    <label>素材来源</label>
+                    <div class="source-toggle" onclick="toggleSourceTable()">
+                        <span>已选：<strong id="selected-source-label">PlayPhrase</strong></span>
+                        <span class="arrow">&#9660;</span>
+                    </div>
+                    <div class="source-table-wrap" id="source-table-wrap">
+                        <table class="source-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px"></th>
+                                    <th>来源</th>
+                                    <th>类型</th>
+                                    <th>说明</th>
+                                    <th style="width:72px">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="source-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div style="margin-top:14px;">
+                    <button class="btn btn-primary" id="search-materials-btn"
+                            onclick="searchMaterials()">① 搜索素材并挑选</button>
+                    <p id="material-search-status" style="font-size:13px;color:#666;margin-top:8px;text-align:center;"></p>
+                </div>
+            </div>
+
+            <!-- 视频直链导入：抖音/西瓜/AcFun/Vimeo 这类不支持搜索的站点只能走这里 -->
+            <div style="border:2px dashed #000; border-radius:4px; padding:12px; margin-top:14px; background:#fafafa;">
+                <label style="font-size:0.85em; font-weight:700; display:block; margin-bottom:6px;">
+                    或从视频链接导入（抖音 / 西瓜 / AcFun / Vimeo / YouTube / B站）
+                </label>
+                <textarea id="url-input" rows="2"
+                          style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-family:inherit; font-size:0.85em; resize:vertical;"
+                          placeholder="一行一个链接，例如：https://www.douyin.com/video/xxxx"></textarea>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+                    <button class="btn btn-secondary btn-small" id="url-import-btn" onclick="importUrls()">导入链接</button>
+                    <span id="url-import-status" style="font-size:0.82em; color:#666;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.5 候选素材 -->
+        <div class="card hidden" id="material-section">
+            <h2><span class="num">2</span> 候选素材 <span id="material-count" style="font-size:0.7em;color:#FB7299;"></span></h2>
+            <p id="material-step-note" style="font-size:13px;color:#666;margin-bottom:12px;">
+                已停在第 2 步：不会自动开始混剪。勾选想用的片段，不需要的可以删掉。
+            </p>
+            <div class="material-actions">
+                <button class="btn btn-secondary btn-small" onclick="selectAllMaterials(true)">全选</button>
+                <button class="btn btn-secondary btn-small" onclick="selectAllMaterials(false)">全不选</button>
+                <label class="btn btn-secondary btn-small" for="material-upload">＋ 添加本地视频</label>
+                <input type="file" id="material-upload" accept="video/*" multiple
+                       style="display:none" onchange="addLocalMaterials(this)">
+            </div>
+            <div class="material-grid" id="material-grid"></div>
+            <p id="material-empty" class="hidden" style="color:#888;">还没有候选素材，先点上面的“① 搜索素材并挑选”。</p>
+            <button class="btn btn-secondary" style="width:100%;margin-top:16px"
+                    id="confirm-materials-btn"
+                    onclick="confirmMaterials()">② 确认素材，继续设置 ↓</button>
+        </div>
+
+        <!-- 2. BGM -->
+        <div class="card" id="bgm-card">
+            <h2><span class="num">3</span> 背景音乐</h2>
+            <div class="tab-group">
+                <div class="tab active" onclick="switchBgm('search', this)">搜索 BGM</div>
+                <div class="tab" onclick="switchBgm('upload', this)">本地上传</div>
+            </div>
+            <div id="bgm-search-section">
+                <div class="form-group">
+                    <label>搜索关键词</label>
+                    <input type="text" id="bgm-query" placeholder="如：epic cinematic / 古风纯音乐 / 漫威 BGM">
+                    <p style="font-size:12px;color:#777;margin-top:6px">
+                        BGM 来自 B站搜索（10 分钟以内）；也可以直接上传本地音乐。
+                    </p>
+                </div>
+            </div>
+            <div id="bgm-upload-section" class="hidden">
+                <div class="file-upload">
+                    <label for="bgm-file">选择 BGM 文件</label>
+                    <input type="file" id="bgm-file" accept="audio/*" onchange="updateFileNames(this, 'bgm-name')">
+                    <span class="file-name" id="bgm-name">未选择文件</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 风格 -->
+        <div class="card" style="position:relative">
+            <h2><span class="num">4</span> 风格模板</h2>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label>想要的效果（一句话）</label>
+                <input type="text" id="effect-prompt" placeholder="例如：动漫高燃，10秒，带音效，不要黑场，只留 BGM">
+                <p style="font-size:0.8em; color:#888; margin-top:6px;">
+                    会映射到风格 / 音效 / 镜头密度 / 时长；下面手动选的更具体设置优先。
+                </p>
+            </div>
+            <div class="style-grid" id="style-grid">
+                <!-- JS 动态渲染 -->
+            </div>
+            <p id="style-desc" style="font-size:0.85em; color:#666; margin-top:12px; min-height:1.2em; text-align:center;"></p>
+            <input type="hidden" id="style-value" value="dynamic">
+            <input type="hidden" id="style-preset-value" value="">
+        </div>
+
+        <!-- 5. 高级设置 -->
+        <div class="card">
+            <div class="adv-toggle" onclick="toggleAdvPanel()">
+                <span><span class="num" style="display:inline-flex;width:28px;height:28px;background:#FB7299;color:#fff;font-size:0.85em;font-weight:900;border:2px solid #000;align-items:center;justify-content:center;flex-shrink:0;vertical-align:middle;margin-right:8px;">5</span> 高级设置</span>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="adv-panel" id="adv-panel">
+
+                <!-- 转场模板 -->
+                <div class="form-group">
+                    <label>转场风格</label>
+                    <div class="style-grid" id="transition-grid" style="grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px;">
+                        <!-- JS 动态渲染 -->
+                    </div>
+                    <p id="transition-desc" style="font-size:0.8em; color:#888; margin-top:6px; text-align:center; min-height:1.2em;"></p>
+                </div>
+
+                <!-- 转场细项：时长 / 密度 / 白闪 -->
+                <div class="form-group">
+                    <label>转场参数</label>
+                    <div class="adv-row">
+                        <div class="field">
+                            <span>Transition Length</span>
+                            <select id="transition-length">
+                                <option value="auto">自动 · 推荐 0.40s</option>
+                                <option value="0.25">轻快 0.25s</option>
+                                <option value="0.40" selected>明显 0.40s</option>
+                                <option value="0.55">舒缓 0.55s</option>
+                                <option value="0.70">电影感 0.70s</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <span>Transition Density</span>
+                            <select id="transition-density">
+                                <option value="auto">自动 · 推荐 60%</option>
+                                <option value="0.25">稀疏 25%</option>
+                                <option value="0.45">均衡 45%</option>
+                                <option value="0.60" selected>标准 60%</option>
+                                <option value="0.80">密集 80%</option>
+                                <option value="1.0">每切必转 100%</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <span>Flash Accent</span>
+                            <select id="transition-flash">
+                                <option value="auto" selected>自动 · 少量点缀</option>
+                                <option value="off">关闭白闪</option>
+                                <option value="light">少量白闪</option>
+                                <option value="heavy">较多白闪</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="tech-note">// 智能推荐 = 10 种 xfade 效果按强弱拍轮换，约四成硬切保留节奏；转场时长不再被压到 0.18s。</div>
+                </div>
+
+                <!-- 输出比例 -->
+                <div class="form-group">
+                    <label>输出比例</label>
+                    <div class="ratio-grid" id="ratio-grid">
+                        <div class="ratio-option active" data-ratio="16/9" onclick="selectRatio(this)">
+                            <span class="ratio-icon" style="width:36px;height:20px;"></span>
+                            16:9 横屏
+                        </div>
+                        <div class="ratio-option" data-ratio="9/16" onclick="selectRatio(this)">
+                            <span class="ratio-icon" style="width:20px;height:36px;"></span>
+                            9:16 竖屏
+                        </div>
+                        <div class="ratio-option" data-ratio="1/1" onclick="selectRatio(this)">
+                            <span class="ratio-icon" style="width:28px;height:28px;"></span>
+                            1:1 方形
+                        </div>
+                        <div class="ratio-option" data-ratio="4/5" onclick="selectRatio(this)">
+                            <span class="ratio-icon" style="width:24px;height:30px;"></span>
+                            4:5 小红书
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 字幕 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>字幕（语音识别 / 歌词）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enable-subtitles" onchange="toggleSubtitleOptions()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div id="subtitle-options" style="display:none; margin-top:10px;">
+                        <div style="display:flex; gap:10px;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕样式</label>
+                                <select id="subtitle-style" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <optgroup label="通用">
+                                        <option value="tiktok">TikTok（居中大字）</option>
+                                        <option value="youtube">YouTube（底部标准）</option>
+                                        <option value="minimal">极简（细字幕）</option>
+                                        <option value="karaoke">卡拉OK（逐字高亮）</option>
+                                        <option value="bold">粗体（醒目白字）</option>
+                                        <option value="cinematic">电影感（底部半透明）</option>
+                                    </optgroup>
+                                    <optgroup label="中文风味">
+                                        <option value="jianghu">江湖风（竖排金字）</option>
+                                        <option value="ink">水墨古风（隶书米白）</option>
+                                        <option value="handwrite">手写便签（舒体）</option>
+                                        <option value="epic">片名史诗（米金居中）</option>
+                                    </optgroup>
+                                    <optgroup label="特效">
+                                        <option value="neon">霓虹发光（青色）</option>
+                                        <option value="extrude">立体投影（白字红影）</option>
+                                        <option value="variety">综艺字幕条（黄底黑字）</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">语言</label>
+                                <select id="subtitle-lang" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="auto">自动检测</option>
+                                    <option value="zh">中文</option>
+                                    <option value="en">英文</option>
+                                    <option value="ja">日文</option>
+                                    <option value="ko">韩文</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕语言</label>
+                                <select id="subtitle-mode" onchange="updateSubtitleHint()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="mono">单语（只出原文）</option>
+                                    <option value="bilingual:auto">双语：原文 + 自动译文</option>
+                                    <option value="bilingual:en">双语：原文 + 英文</option>
+                                    <option value="bilingual:zh">双语：原文 + 中文</option>
+                                    <option value="bilingual:ja">双语：原文 + 日文</option>
+                                    <option value="bilingual:ko">双语：原文 + 韩文</option>
+                                    <option value="bilingual:es">双语：原文 + 西班牙文</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p id="subtitle-hint" style="display:none; font-size:0.8em; color:#6b4f0f; background:#fff8e1; border-left:3px solid #f0b400; padding:6px 8px; margin:8px 0 0; line-height:1.5;"></p>
+
+                        <!-- 字幕文字来源：唱词不要指望语音识别 -->
+                        <div style="margin-top:10px;">
+                            <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕文字来源</label>
+                            <select id="subtitle-source" onchange="toggleLyricBox()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                <option value="auto">自动（填了歌词就用歌词，否则语音识别）</option>
+                                <option value="asr">语音识别（对白 / 口播）</option>
+                                <option value="lyrics">歌词（歌曲 / 音乐视频，推荐）</option>
+                            </select>
+                            <div id="lyric-box" style="display:none; margin-top:8px;">
+                                <textarea id="lyric-text" rows="5" placeholder="粘贴歌词：纯文本一行一句，或带时间戳的 LRC（[00:12.34]歌词）
+留空会自动读取 BGM 内嵌歌词 / 同名 .lrc" style="width:100%; box-sizing:border-box; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.86em; line-height:1.5; font-family:inherit; resize:vertical;"></textarea>
+                                <div style="display:flex; gap:10px; margin-top:8px; align-items:flex-end;">
+                                    <div style="flex:1;">
+                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">时间偏移（秒，留空自动估计）</label>
+                                        <input type="number" id="lyric-offset" step="0.1" placeholder="自动"
+                                               style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">重复段（副歌唱第二遍/第三遍）</label>
+                                        <select id="lyric-repeat" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                            <option value="auto">自动检测并补齐（推荐）</option>
+                                            <option value="off">不补齐，只出一遍</option>
+                                            <option value="2">最多补 2 遍</option>
+                                            <option value="3">最多补 3 遍</option>
+                                            <option value="4">最多补 4 遍</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:10px; margin-top:8px; align-items:flex-end;">
+                                    <div style="flex:2;">
+                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">古风 DJ / remix 版适配</label>
+                                        <select id="dj-mode" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                            <option value="auto">自动（提纯人声 + 找原版 + 变速对齐，推荐）</option>
+                                            <option value="enhance">只提纯人声，不做变速对齐</option>
+                                            <option value="off">关闭（按普通歌曲处理）</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label style="font-size:0.8em; font-weight:700; color:#333; display:block; margin-bottom:4px;">变速比（留空自动估）</label>
+                                        <input type="number" id="dj-ratio" step="0.01" min="0.5" max="2.5" placeholder="自动"
+                                               style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                                    </div>
+                                </div>
+                                <p style="font-size:0.78em; color:#555; margin:6px 0 0; line-height:1.5;">
+                                    只给一遍歌词即可：系统会用音频找出后面重复演唱的段落，自动把这一遍的时间轴平移过去，
+                                    第二遍、第三遍不用再抄一遍词。歌词只管文字，时间轴由识别结果对齐；
+                                    识别不到时按有声区间分配，不会出现整段空白。纯文本也能用，但 LRC（自带时间戳）最准。
+                                    <b>DJ 版</b>会自动分离鼓点/提纯人声、估算变速比，并拿上传的原版 BGM 或本机音乐库里的原曲
+                                    把歌词时间轴整条映射过去（不是靠识别硬猜），变速、加鼓、切片循环都能跟住。
+                                </p>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字号（0 = 按样式自动，随画幅缩放）</label>
+                                <input type="number" id="subtitle-size" value="0" min="0" max="200" step="2"
+                                       style="width:100%; padding:8px 10px; border:2px solid #000; border-radius:4px; font-size:0.88em;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">颜色</label>
+                                <select id="subtitle-color" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="">跟随样式</option>
+                                    <option value="white">白色</option>
+                                    <option value="yellow">黄色</option>
+                                    <option value="cyan">青色</option>
+                                    <option value="orange">橙色</option>
+                                    <option value="pink">粉色</option>
+                                    <option value="black">黑色</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">位置</label>
+                                <select id="subtitle-position" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="auto">跟随样式</option>
+                                    <option value="lyric">歌词（避开底部原有字幕）</option>
+                                    <option value="top">顶部</option>
+                                    <option value="middle">居中</option>
+                                    <option value="bottom">底部</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">视频比例（字幕适配）</label>
+                                <select id="subtitle-aspect" onchange="onSubtitleAspectChange()" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="auto">自动（跟随成片，推荐）</option>
+                                    <option value="16:9">横屏 16:9</option>
+                                    <option value="9:16">竖屏 9:16</option>
+                                    <option value="1:1">方形 1:1</option>
+                                    <option value="4:5">竖版 4:5</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">字幕大小档位</label>
+                                <select id="subtitle-fit" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="auto">自动适配</option>
+                                    <option value="small">偏小</option>
+                                    <option value="normal">标准</option>
+                                    <option value="large">偏大</option>
+                                    <option value="xlarge">特大</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p style="font-size:0.78em; color:#555; margin:8px 0 0; line-height:1.5;">
+                            字幕会按成片分辨率与画幅自动缩放：1080p 横屏放大约 35%、4K 横屏约 2.7 倍，解决横屏字幕过小；
+                            竖屏按宽度排版，长句仍会自动收窄以免出画。上方「画面比例」选了竖屏时，字幕会自动跟着适配。
+                        </p>
+                        <div style="display:flex; gap:10px; margin-top:10px; align-items:flex-end;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.82em; font-weight:700; color:#333; display:block; margin-bottom:4px;">片尾音乐渐弱</label>
+                                <select id="bgm-fade-out" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                                    <option value="auto">自动（最后 2~4.5 秒，推荐）</option>
+                                    <option value="off">不渐弱（保持原样）</option>
+                                    <option value="2">短淡出 2 秒</option>
+                                    <option value="3">3 秒</option>
+                                    <option value="5">长淡出 5 秒</option>
+                                </select>
+                            </div>
+                            <p style="flex:1.4; font-size:0.78em; color:#555; margin:0; line-height:1.5;">
+                                成片结尾音乐不再被硬切，最后一句附近开始平滑收小；只作用于 BGM 轨，对白/音效/旁白不受影响。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 缓存占用 / 自动清理 -->
+                <div class="form-group">
+                    <label>缓存与磁盘</label>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span id="cache-usage" style="font-size:0.85em; color:#555;">读取中…</span>
+                        <button type="button" id="cache-cleanup-btn" onclick="cleanupCache()"
+                                style="padding:6px 14px; border:2px solid #000; border-radius:4px; background:#fff; font-size:0.82em; font-weight:700; cursor:pointer;">
+                            立即清理缓存
+                        </button>
+                    </div>
+                    <p id="cache-msg" style="font-size:0.78em; color:#555; margin:6px 0 0; line-height:1.5;">
+                        每个任务跑完会自动按上限清理旧的中间文件（裁剪、去黑场、镜头切片、过期上传），
+                        成片与正在使用的素材不会被删。上限默认 20 GB，可用 MONTAGE_CACHE_LIMIT_GB 调整。
+                    </p>
+                </div>
+
+                <!-- 色彩分级 -->
+                <div class="form-group">
+                    <label>色彩分级</label>
+                    <div class="grade-grid" id="grade-grid">
+                        <div class="grade-option active" data-grade="auto" onclick="selectGrade(this)">跟随风格</div>
+                        <div class="grade-option" data-grade="none" onclick="selectGrade(this)">无（关闭调色）</div>
+                        <div class="grade-option" data-grade="cinematic" onclick="selectGrade(this)">电影</div>
+                        <div class="grade-option" data-grade="vibrant" onclick="selectGrade(this)">鲜艳</div>
+                        <div class="grade-option" data-grade="vintage" onclick="selectGrade(this)">复古</div>
+                        <div class="grade-option" data-grade="teal_orange" onclick="selectGrade(this)">青橙</div>
+                        <div class="grade-option" data-grade="noir" onclick="selectGrade(this)">黑白</div>
+                        <div class="grade-option" data-grade="warm" onclick="selectGrade(this)">暖色</div>
+                        <div class="grade-option" data-grade="cool" onclick="selectGrade(this)">冷色</div>
+                        <div class="grade-option" data-grade="golden_hour" onclick="selectGrade(this)">黄金时刻</div>
+                        <div class="grade-option" data-grade="blue_hour" onclick="selectGrade(this)">蓝调</div>
+                        <div class="grade-option" data-grade="blockbuster" onclick="selectGrade(this)">大片</div>
+                        <div class="grade-option" data-grade="high_contrast" onclick="selectGrade(this)">高对比</div>
+                        <div class="grade-option" data-grade="desaturated" onclick="selectGrade(this)">去饱和</div>
+                        <div class="grade-option" data-grade="filmic_warm" onclick="selectGrade(this)">胶片暖</div>
+                        <div class="grade-option" data-grade="documentary" onclick="selectGrade(this)">纪录片</div>
+                        <div class="grade-option" data-grade="natural" onclick="selectGrade(this)">自然</div>
+                        <div class="grade-option" data-grade="neutral" onclick="selectGrade(this)">中性</div>
+                    </div>
+                </div>
+
+                <!-- 对白闪避 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>对白闪避（有人声时自动降低 BGM）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enable-ducking">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 音效卡点 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>音效卡点（强拍 impact / 切点 whoosh）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enable-sfx" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 镜头密度 -->
+                <div class="form-group">
+                    <label>镜头密度 / 成片长度</label>
+                    <select id="shot-density" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                        <option value="standard" selected>标准（默认，镜头间留 1s 间隔）</option>
+                        <option value="dense">密集（更多镜头，间隔 0.5s）</option>
+                        <option value="max">极密（尽量用满素材，间隔 0）</option>
+                    </select>
+                </div>
+
+                <!-- 目标时长 -->
+                <div class="form-group">
+                    <label>目标时长（秒，0 = 按 BGM 自动）</label>
+                    <input type="number" id="target-duration" value="0" min="0" max="3600" step="1">
+                </div>
+
+                <!-- 输出画质 -->
+                <div class="form-group">
+                    <label>输出画质</label>
+                    <select id="render-quality" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                        <option value="auto" selected>自动（跟随素材：1080p 素材出 1080p）</option>
+                        <option value="4k">4K（3840×2160，最清晰但很慢）</option>
+                        <option value="1440p">2K（2560×1440）</option>
+                        <option value="1080p">1080p（1920×1080）</option>
+                        <option value="720p">720p（1280×720，文件小）</option>
+                    </select>
+                    <p style="font-size:0.78em; color:#666; margin-top:4px; line-height:1.4;">
+                        编码固定用 CRF 18（近无损）。选高于素材的分辨率只是放大，不会更清晰。
+                    </p>
+                </div>
+
+                <!-- 镜头检测灵敏度 -->
+                <div class="form-group">
+                    <label>镜头检测灵敏度</label>
+                    <select id="detect-threshold" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                        <option value="0.2" selected>精细（0.2，切得更碎）</option>
+                        <option value="0.35">标准（0.35）</option>
+                        <option value="0.5">动漫 / 快剪（0.5）</option>
+                        <option value="0.6">粗切（0.6）</option>
+                    </select>
+                </div>
+
+                <!-- 静音原声 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>静音原声（只保留 BGM / 音效）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="mute-source">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 自动去黑场 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>自动去黑场（检测并删除源黑段）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="clean-black" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 色彩统一 -->
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <label>色彩统一（统一所有镜头亮度色调）</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enable-harmonize">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 视频防抖 -->
+                <div class="form-group">
+                    <label>视频防抖</label>
+                    <select id="stabilize-mode" style="width:100%; padding:8px 10px; background:#fff; border:2px solid #000; border-radius:4px; font-size:0.88em; font-family:inherit;">
+                        <option value="auto" selected>跟随风格模板</option>
+                        <option value="true">强制开启（更稳，渲染更慢）</option>
+                        <option value="false">关闭</option>
+                    </select>
+                </div>
+
+                <!-- 配音旁白 -->
+                <div class="form-group">
+                    <label>配音旁白（可选）</label>
+                    <div class="file-upload">
+                        <label for="narration-file">选择人声音频</label>
+                        <input type="file" id="narration-file" accept="audio/*" onchange="updateFileNames(this, 'narration-name')">
+                        <span class="file-name" id="narration-name">未选择文件</span>
+                    </div>
+                    <p style="font-size:12px;color:#777;margin-top:6px;">会混进成片，并在旁白时段自动压低 BGM。</p>
+                </div>
+
+                <!-- 视频增强 -->
+                <div class="form-group">
+                    <label>视频增强</label>
+                    <div class="chips" id="enhance-chips">
+                        <div class="chip" data-enhance="denoise" onclick="toggleChip(this)">🔇 降噪</div>
+                        <div class="chip" data-enhance="sharpen" onclick="toggleChip(this)">🔪 锐化</div>
+                        <div class="chip" data-enhance="grain" onclick="toggleChip(this)">🎞️ 胶片颗粒</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 提交 -->
+        <p id="submit-hint" style="text-align:center;font-size:13px;color:#666;margin-bottom:8px;">
+            第 1 步：先搜索并确认素材
+        </p>
+        <button class="btn btn-primary" id="submit-btn" onclick="submitTask()">③ 开始混剪</button>
+
+        <!-- 进度 -->
+        <div class="card progress-container" id="progress-section">
+            <h2><span class="num">!</span> 混剪进度</h2>
+            <div class="progress-steps" id="progress-steps">
+                <div class="step-item" id="step-bgm"><span class="step-icon">🎵</span> BGM</div>
+                <div class="step-item" id="step-search"><span class="step-icon">🔍</span> 搜索素材</div>
+                <div class="step-item" id="step-analyze"><span class="step-icon">🧠</span> 分析</div>
+                <div class="step-item" id="step-render"><span class="step-icon">🎬</span> 渲染</div>
+                <div class="step-item" id="step-post"><span class="step-icon">✨</span> 后处理</div>
+            </div>
+            <div class="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
+            <p class="progress-status" id="progress-msg">准备中...</p>
+            <p class="progress-elapsed" id="progress-elapsed"></p>
+        </div>
+
+        <!-- 结果 -->
+        <div class="card result" id="result-section">
+            <h2>混剪完成!</h2>
+            <video id="proxy-video" controls playsinline preload="metadata"
+                   style="width:100%; max-width:560px; border-radius:8px; background:#000; border:2px solid #000;"></video>
+            <p style="margin: 10px 0 4px;"><a id="download-link" href="#">下载原片</a></p>
+            <p style="font-size:0.8em; color:#666; margin:0 0 8px; line-height:1.5;">
+                上面播放的是<b>为秒开而压过的预览版</b>（1280 宽、高压缩），会显得比成片糊。
+                判断清晰度请下载原片，或用下面的「播放原片」。
+            </p>
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:6px;">
+                <a id="raw-link" href="#" target="_blank" rel="noopener"
+                   style="padding:7px 14px; background:#fff; border:2px solid #000; border-radius:6px; font-weight:700; font-size:0.85em; text-decoration:none; color:#000;">
+                   播放原片（不压缩）
+                </a>
+                <span id="output-meta" style="font-size:0.82em; color:#666; align-self:center;"></span>
+            </div>
+            <div id="result-warnings" style="display:none; text-align:left; font-size:0.85em; color:#8a4b00; background:#fff7e6; border:2px dashed #000; border-radius:6px; padding:10px 12px; margin:12px 0;"></div>
+            <div style="display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:6px;">
+                <button type="button" id="btn-preview"
+                        style="padding:9px 16px; background:#fff; border:2px solid #000; border-radius:6px; font-family:inherit; font-weight:700; cursor:pointer; font-size:0.88em;">
+                    参数预览（前 6 秒）
+                </button>
+                <span id="preview-status" style="font-size:0.85em; color:#666;"></span>
+            </div>
+            <div id="preview-box" style="display:none; margin-top:14px;">
+                <div style="font-size:0.85em; font-weight:700; color:#333; margin-bottom:6px;">参数预览</div>
+                <video id="preview-video" controls playsinline preload="metadata"
+                       style="width:100%; max-width:560px; border-radius:8px; background:#000; border:2px solid #000;"></video>
+                <p id="preview-meta" style="font-size:0.82em; color:#666; margin-top:6px;"></p>
+            </div>
+        </div>
+
+        <!-- 任务历史 -->
+        <div class="card" id="history-card">
+            <h2><span class="num">↺</span> 任务历史</h2>
+            <div class="material-actions">
+                <button class="btn btn-secondary btn-small" onclick="loadTasks()">刷新列表</button>
+                <span id="history-status" style="font-size:0.82em; color:#666;"></span>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="source-table" id="history-table">
+                    <thead>
+                        <tr>
+                            <th style="width:96px">时间</th>
+                            <th style="width:70px">类型</th>
+                            <th style="width:76px">状态</th>
+                            <th>进度</th>
+                            <th style="width:150px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody"></tbody>
+                </table>
+            </div>
+            <p id="history-empty" style="font-size:0.85em; color:#888; margin-top:8px;">
+                还没有任务记录。完成一次混剪后这里会保留历史，可直接下载或重试失败的任务。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ===== 素材来源数据 =====
+        const sources = [
+            { value: "playphrase", name: "PlayPhrase", type: "电影原片", desc: "英文台词片段（中文请选 B站）", status: "recommend", checked: true },
+            { value: "bilibili", name: "B站", type: "二创", desc: "中文/动漫/影视，playurl 下载", status: "ok", checked: false },
+            { value: "youtube", name: "YouTube", type: "全品类", desc: "需要代理+登录cookies", status: "limited", checked: false },
+            { value: "dailymotion", name: "Dailymotion", type: "全品类", desc: "国际视频平台", status: "limited", checked: false },
+            { value: "quodb", name: "QuoDB", type: "台词库", desc: "只返回电影名+时间码，出不了视频", status: "limited", checked: false },
+            { value: "douyin", name: "抖音", type: "短视频", desc: "不支持搜索，请用「链接导入」", status: "url", checked: false },
+            { value: "ixigua", name: "西瓜视频", type: "影视综艺", desc: "不支持搜索，请用「链接导入」", status: "url", checked: false },
+            { value: "acfun", name: "AcFun", type: "动漫二创", desc: "不支持搜索，请用「链接导入」", status: "url", checked: false },
+            { value: "vimeo", name: "Vimeo", type: "创意短片", desc: "不支持搜索，请用「链接导入」", status: "url", checked: false },
+            { value: "yarn", name: "YARN", type: "台词搜索", desc: "站点 Cloudflare 封锁，不可用", status: "unavailable", checked: false },
+            { value: "zhaotaici", name: "找台词网", type: "中文台词", desc: "SSL 错误，站点已下线", status: "unavailable", checked: false },
+        ];
+
+        const badgeMap = {
+            recommend: { text: "推荐", cls: "badge-recommend" },
+            ok: { text: "可用", cls: "badge-ok" },
+            limited: { text: "受限", cls: "badge-limited" },
+            url: { text: "直链", cls: "badge-limited" },
+            unavailable: { text: "不可用", cls: "badge-unavailable" },
+        };
+
+        // 渲染来源表格
+        function renderSourceTable() {
+            const tbody = document.getElementById("source-tbody");
+            tbody.innerHTML = sources.map((s, i) => {
+                const badge = badgeMap[s.status];
+                const lock = s.status === "unavailable" || s.status === "url";
+                const disabled = lock ? ' class="disabled"' : "";
+                return `<tr${disabled} onclick="toggleSource(${i}, this)">
+                    <td><input type="checkbox" data-index="${i}" ${s.checked ? "checked" : ""} ${lock ? "disabled" : ""} onclick="event.stopPropagation()" onchange="onSourceCheck()"></td>
+                    <td class="source-name">${s.name}</td>
+                    <td><span class="type-tag">${s.type}</span></td>
+                    <td>${s.desc}</td>
+                    <td><span class="badge ${badge.cls}">${badge.text}</span></td>
+                </tr>`;
+            }).join("");
+            updateSelectedCount();
+        }
+
+        function onSourceCheck() {
+            const checks = document.querySelectorAll(".source-table input[type=checkbox]");
+            checks.forEach((cb, i) => { sources[i].checked = cb.checked; });
+            updateSelectedCount();
+        }
+
+        function toggleSource(index, row) {
+            const st = sources[index].status;
+            if (st === "unavailable" || st === "url") return;
+            sources[index].checked = !sources[index].checked;
+            const cb = row.querySelector("input[type=checkbox]");
+            cb.checked = sources[index].checked;
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const names = sources.filter(s => s.checked).map(s => s.name);
+            document.getElementById("selected-source-label").textContent =
+                names.length ? names.join(" / ") : "未选择来源";
+        }
+
+        function getSelectedSources() {
+            return sources.filter(s => s.checked).map(s => s.value);
+        }
+
+        // ===== 候选素材（先搜再挑） =====
+        let materialCandidates = [];
+        let materialsConfirmed = false;
+
+        function escapeHtml(s) {
+            return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[c]));
+        }
+
+        function mediaUrl(path) {
+            return `/api/media?path=${encodeURIComponent(path)}`;
+        }
+
+        function formatDuration(sec) {
+            sec = Number(sec) || 0;
+            if (sec <= 0) return "时长未知";
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${String(s).padStart(2, "0")}`;
+        }
+
+        function updateSubmitHint() {
+            const hint = document.getElementById("submit-hint");
+            const selected = materialCandidates.filter(m => m.selected).length;
+            if (!materialCandidates.length) {
+                hint.textContent = "第 1 步：先搜索并挑选素材";
+            } else if (!materialsConfirmed) {
+                hint.textContent = "第 2 步：挑选后点“确认素材，继续设置”";
+            } else {
+                hint.textContent = `第 3 步：用已选 ${selected} 个素材开始混剪`;
+            }
+        }
+
+        function confirmMaterials() {
+            const selected = materialCandidates.filter(m => m.selected);
+            if (!selected.length) {
+                showToast("请至少勾选一个素材");
+                return;
+            }
+            materialsConfirmed = true;
+            updateSubmitHint();
+            const note = document.getElementById("material-step-note");
+            if (note) note.textContent = `已确认 ${selected.length} 个素材，进入第 3 步：设置 BGM / 风格。`;
+            document.getElementById("material-search-status").textContent =
+                `已确认 ${selected.length} 个素材，可以开始混剪`;
+            const confirmBtn = document.getElementById("confirm-materials-btn");
+            if (confirmBtn) confirmBtn.textContent = "✓ 已确认，继续设置 ↓";
+            showToast(`已确认 ${selected.length} 个素材，继续设置 BGM / 风格`);
+            document.getElementById("bgm-card").scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function renderMaterials() {
+            const section = document.getElementById("material-section");
+            const grid = document.getElementById("material-grid");
+            const empty = document.getElementById("material-empty");
+            const count = document.getElementById("material-count");
+            if (!materialCandidates.length) {
+                section.classList.add("hidden");
+                grid.innerHTML = "";
+                updateSubmitHint();
+                return;
+            }
+            section.classList.remove("hidden");
+            const selected = materialCandidates.filter(m => m.selected).length;
+            count.textContent = `已选 ${selected}/${materialCandidates.length}`;
+            grid.innerHTML = materialCandidates.map((m, i) => `
+                <div class="material-card">
+                    <video src="${mediaUrl(m.path)}" preload="metadata" controls muted></video>
+                    <div class="material-name" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>
+                    <div class="material-meta">${formatDuration(m.duration)} · ${(m.size / 1048576).toFixed(1)} MB</div>
+                    <div class="material-row">
+                        <label><input type="checkbox" ${m.selected ? "checked" : ""}
+                            onchange="setMaterialSelected(${i}, this.checked)"> 使用</label>
+                        <button class="material-del" onclick="removeMaterial(${i})">删除</button>
+                    </div>
+                </div>`).join("");
+            updateSubmitHint();
+        }
+
+        function setMaterialSelected(index, checked) {
+            if (materialCandidates[index]) materialCandidates[index].selected = checked;
+            renderMaterials();
+        }
+
+        function removeMaterial(index) {
+            materialCandidates.splice(index, 1);
+            renderMaterials();
+        }
+
+        function selectAllMaterials(checked) {
+            materialCandidates.forEach(m => { m.selected = checked; });
+            renderMaterials();
+        }
+
+        async function addLocalMaterials(input) {
+            const files = input.files;
+            if (!files || !files.length) return;
+            const paths = await uploadFiles(files);
+            for (const path of (paths || [])) {
+                materialCandidates.push({
+                    path,
+                    name: path.split(/[\\/]/).pop(),
+                    duration: 0,
+                    size: 0,
+                    selected: true,
+                });
+            }
+            input.value = "";
+            materialsConfirmed = false;
+            renderMaterials();
+            document.getElementById("material-section").scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        async function importUrls() {
+            const input = document.getElementById("url-input");
+            const status = document.getElementById("url-import-status");
+            const btn = document.getElementById("url-import-btn");
+            const raw = (input.value || "").trim();
+            if (!raw) { shake(input); showToast("请先粘贴视频链接"); return; }
+            const urls = raw.split(/[\s,，；;]+/).filter(u => /^https?:\/\//i.test(u));
+            if (!urls.length) { shake(input); showToast("链接需要以 http(s):// 开头"); return; }
+
+            btn.disabled = true;
+            btn.textContent = "下载中...";
+            status.textContent = `正在下载 ${urls.length} 个链接（单个可能要几十秒）...`;
+            try {
+                const fd = new FormData();
+                fd.append("urls", JSON.stringify(urls));
+                fd.append("max_clips", String(Math.min(urls.length, 8)));
+                const resp = await fetch("/api/url/import", { method: "POST", body: fd });
+                const data = await resp.json();
+                if (data.error) {
+                    status.textContent = "❌ " + data.error;
+                    return;
+                }
+                for (const c of (data.clips || [])) {
+                    materialCandidates.push({ ...c, selected: true });
+                }
+                materialsConfirmed = false;
+                input.value = "";
+                renderMaterials();
+                status.textContent = `已导入 ${(data.clips || []).length} 个`
+                    + (data.failed ? `，${data.failed} 个失败` : "");
+                document.getElementById("material-section")
+                    .scrollIntoView({ behavior: "smooth", block: "start" });
+            } catch (e) {
+                status.textContent = "❌ 导入失败: " + e.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "导入链接";
+            }
+        }
+
+        function buildSourceList(queryText) {
+            const isChinese = /[\u4e00-\u9fff]/.test(queryText);
+            let sourceList = [...getSelectedSources()];
+            if (isChinese && sourceList.includes("bilibili")) {
+                sourceList = ["bilibili", ...sourceList.filter(s => s !== "bilibili")];
+            } else if (isChinese &&
+                       sourceList.some(s => ["playphrase", "quodb"].includes(s))) {
+                sourceList = ["bilibili"];
+                sources.forEach(s => { s.checked = s.value === "bilibili"; });
+                renderSourceTable();
+                updateSelectedCount();
+                showToast("检测到中文关键词，已自动切换到 B站");
+            }
+            return sourceList;
+        }
+
+        async function searchMaterials() {
+            const query = document.getElementById("search-query");
+            const status = document.getElementById("material-search-status");
+            const btn = document.getElementById("search-materials-btn");
+            if (!query.value.trim()) {
+                shake(query);
+                showToast("请输入搜索关键词");
+                return;
+            }
+            const sourceList = buildSourceList(query.value.trim());
+            if (!sourceList.length) {
+                shake(document.querySelector(".source-toggle"));
+                showToast("请至少选择一个素材来源");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "① 搜索中...";
+            materialsConfirmed = false;
+            materialCandidates = [];
+            renderMaterials();
+            status.textContent = "正在搜索素材，B站下载可能需要 1～2 分钟...";
+            const fd = new FormData();
+            fd.append("query", query.value.trim());
+            fd.append("source", sourceList[0]);
+            fd.append("sources", JSON.stringify(sourceList));
+            fd.append("clip_limit", document.getElementById("clip-limit").value);
+
+            try {
+                const resp = await fetch("/api/materials", { method: "POST", body: fd });
+                if (!resp.ok) throw new Error(`服务器返回错误 (${resp.status})`);
+                const data = await resp.json();
+                const es = new EventSource(`/api/task/${data.task_id}/progress`);
+                es.onmessage = async (e) => {
+                    const t = JSON.parse(e.data);
+                    status.textContent = t.message || "搜索中...";
+                    if (t.status === "done") {
+                        es.close();
+                        btn.disabled = false;
+                        btn.textContent = "① 搜索素材并挑选";
+                        try {
+                            const full = await (await fetch(`/api/task/${data.task_id}`)).json();
+                            materialCandidates = ((full.result || {}).candidates || []).map(x => ({ ...x, selected: true }));
+                            materialsConfirmed = false;
+                            renderMaterials();
+                            const note = document.getElementById("material-step-note");
+                            if (note) note.textContent = "已停在第 2 步：不会自动开始混剪。勾选想用的片段，不需要的可以删掉。";
+                            const confirmBtn = document.getElementById("confirm-materials-btn");
+                            if (confirmBtn) confirmBtn.textContent = "② 确认素材，继续设置 ↓";
+                            status.textContent = materialCandidates.length
+                                ? `已找到 ${materialCandidates.length} 个候选，已停在第 2 步，请挑选后点“确认素材”`
+                                : "没有找到候选素材";
+                            document.getElementById("material-section").scrollIntoView({ behavior: "smooth", block: "start" });
+                        } catch (err) {
+                            status.textContent = "读取候选素材失败: " + err.message;
+                        }
+                    } else if (t.status === "error" || t.status === "canceled") {
+                        es.close();
+                        btn.disabled = false;
+                        btn.textContent = "① 搜索素材并挑选";
+                        status.textContent = "❌ " + (t.message || "搜索失败");
+                    }
+                };
+                es.onerror = () => {
+                    es.close();
+                    btn.disabled = false;
+                    btn.textContent = "① 搜索素材并挑选";
+                };
+            } catch (e) {
+                btn.disabled = false;
+                btn.textContent = "① 搜索素材并挑选";
+                status.textContent = "❌ " + e.message;
+            }
+        }
+
+        // 展开/收起来源表格
+        function toggleSourceTable() {
+            const toggle = document.querySelector(".source-toggle");
+            const wrap = document.getElementById("source-table-wrap");
+            toggle.classList.toggle("open");
+            wrap.classList.toggle("open");
+        }
+
+        // ===== Tab 切换 =====
+        let sourceMode = "search";
+        let bgmMode = "search";
+
+        function switchSource(mode, el) {
+            sourceMode = mode;
+            el.parentElement.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            el.classList.add("active");
+            document.getElementById("upload-section").classList.toggle("hidden", mode !== "upload");
+            document.getElementById("search-section").classList.toggle("hidden", mode !== "search");
+        }
+
+        function switchBgm(mode, el) {
+            bgmMode = mode;
+            el.parentElement.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            el.classList.add("active");
+            document.getElementById("bgm-upload-section").classList.toggle("hidden", mode !== "upload");
+            document.getElementById("bgm-search-section").classList.toggle("hidden", mode !== "search");
+        }
+
+        // ===== 震动提示 =====
+        function shake(el) {
+            if (!el) return;
+            el.classList.remove("shake");
+            void el.offsetWidth; // 触发 reflow 重启动画
+            el.classList.add("shake");
+            setTimeout(() => el.classList.remove("shake"), 500);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById("toast");
+            t.textContent = msg;
+            t.classList.add("show");
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => t.classList.remove("show"), 2200);
+        }
+
+        // ===== 文件上传 =====
+        function updateFileNames(input, spanId) {
+            const span = document.getElementById(spanId);
+            if (input.files.length === 0) span.textContent = "未选择文件";
+            else if (input.files.length === 1) span.textContent = input.files[0].name;
+            else span.textContent = input.files.length + " 个文件";
+        }
+
+        // ===== 风格选择（卡片模式） =====
+        let _stylePresets = [];
+
+        // 每个模板的图标和中文名
+        const _styleMeta = {
+            action:      { icon: "💥", cn: "动作大片", tag: "快切·高能" },
+            vlog:        { icon: "📷", cn: "Vlog 日常", tag: "稳定·明亮" },
+            documentary: { icon: "🎞️", cn: "纪录片", tag: "沉稳·自然" },
+            wedding:     { icon: "💍", cn: "婚礼浪漫", tag: "暖色·柔美" },
+            gaming:      { icon: "🎮", cn: "游戏集锦", tag: "高对比·快节奏" },
+            mtv:         { icon: "🎤", cn: "MTV 风格", tag: "节奏感·炫酷" },
+            sport:       { icon: "⚽", cn: "体育高燃", tag: "高速·冲击" },
+            travel:      { icon: "✈️", cn: "旅行日记", tag: "金色调·舒缓" },
+            cinematic:   { icon: "🎬", cn: "电影感", tag: "史诗·质感" },
+            viral:       { icon: "🔥", cn: "爆款短视频", tag: "鲜艳·抓眼球" },
+            lofi:        { icon: "🌙", cn: "Lo-Fi 氛围", tag: "复古·慵懒" },
+        };
+
+        async function loadStylePresets() {
+            try {
+                const resp = await fetch("/api/styles");
+                _stylePresets = await resp.json();
+            } catch (e) {
+                // 降级：用内置数据
+                _stylePresets = [
+                    { id: "action", name: "Action Blockbuster", description: "Explosive energy, rapid cuts" },
+                    { id: "vlog", name: "Vlog Daily", description: "Stable, bright, everyday feel" },
+                    { id: "documentary", name: "Documentary", description: "Calm, natural pacing" },
+                    { id: "wedding", name: "Wedding Romantic", description: "Warm tones, soft transitions" },
+                    { id: "gaming", name: "Gaming Highlights", description: "High contrast, fast rhythm" },
+                    { id: "mtv", name: "MTV Style", description: "Rhythmic, flashy cuts" },
+                    { id: "sport", name: "Sport Highlights", description: "High speed, impactful" },
+                    { id: "travel", name: "Travel Diary", description: "Golden hour, relaxed" },
+                    { id: "cinematic", name: "Cinematic Epic", description: "Epic pacing, filmic look" },
+                    { id: "viral", name: "Viral Short", description: "Vibrant, eye-catching" },
+                    { id: "lofi", name: "Lo-Fi Chill", description: "Dreamy, vintage vibes" },
+                ];
+            }
+            renderStyleGrid();
+        }
+
+        function renderStyleGrid() {
+            const grid = document.getElementById("style-grid");
+            grid.innerHTML = _stylePresets.map(s => {
+                const meta = _styleMeta[s.id] || { icon: "🎨", cn: s.name, tag: "" };
+                return `<div class="style-option" data-id="${s.id}" onclick="selectStyle('${s.id}', this)">
+                    <span class="style-icon">${meta.icon}</span>
+                    <span class="style-name">${meta.cn}</span>
+                    <span class="style-tag">${meta.tag}</span>
+                </div>`;
+            }).join("");
+            // 默认选中 action
+            const defaultEl = grid.querySelector('[data-id="action"]');
+            if (defaultEl) selectStyle("action", defaultEl);
+        }
+
+        function selectStyle(presetId, el) {
+            // 取消之前的选中
+            document.querySelectorAll(".style-option").forEach(o => o.classList.remove("active"));
+            el.classList.add("active");
+
+            document.getElementById("style-preset-value").value = presetId;
+
+            const preset = _stylePresets.find(s => s.id === presetId);
+            const meta = _styleMeta[presetId] || {};
+            document.getElementById("style-desc").textContent =
+                preset ? `${meta.icon || ""} ${preset.description}` : "";
+
+            // 映射到基础风格
+            const styleMap = {
+                action: "intense", gaming: "intense", mtv: "intense",
+                sport: "intense", viral: "intense",
+                vlog: "dynamic", cinematic: "dynamic",
+                documentary: "calm", wedding: "calm", travel: "calm", lofi: "calm",
+            };
+            document.getElementById("style-value").value = styleMap[presetId] || "dynamic";
+        }
+
+        // ===== 转场模板 =====
+        let _transitionPatterns = [];
+
+        async function loadTransitionPatterns() {
+            try {
+                const resp = await fetch("/api/transitions");
+                _transitionPatterns = await resp.json();
+            } catch (e) {
+                _transitionPatterns = [
+                    { id: "auto", name: "智能推荐", description: "10 种转场按强弱拍轮换，约四成硬切", icon: "🤖" },
+                    { id: "smart_mix", name: "智能混搭", description: "多种 xfade 轮换，白闪只做点缀", icon: "🛰️" },
+                    { id: "hard_cut", name: "硬切流", description: "全部硬切，干净利落", icon: "✂️" },
+                    { id: "mtv_energy", name: "MTV 高能", description: "闪光+缩放+硬切交替", icon: "⚡" },
+                    { id: "cinematic_flow", name: "电影质感", description: "溶解+淡入淡出为主", icon: "🎬" },
+                    { id: "smooth_slide", name: "丝滑滑动", description: "方向滑动转场", icon: "🌊" },
+                    { id: "action_whip", name: "动作甩切", description: "快速模糊+滑动", icon: "💥" },
+                    { id: "dreamy_fade", name: "梦幻渐变", description: "圆形开合+径向", icon: "🌙" },
+                    { id: "retro_wipe", name: "复古擦除", description: "对角线+矩形裁切", icon: "📼" },
+                    { id: "vlog_gentle", name: "Vlog 温柔", description: "淡入淡出+柔和溶解", icon: "📷" },
+                    { id: "random_mix", name: "随机混搭", description: "随机转场组合", icon: "🎲" },
+                ];
+            }
+            renderTransitionGrid();
+        }
+
+        function renderTransitionGrid() {
+            const grid = document.getElementById("transition-grid");
+            grid.innerHTML = _transitionPatterns.map(p =>
+                `<div class="trans-option" data-id="${p.id}" onclick="selectTransition('${p.id}', this)" title="${p.description}">
+                    <span class="trans-icon">${p.icon}</span>
+                    ${p.name}
+                </div>`
+            ).join("");
+            // 默认选中 auto
+            const defaultEl = grid.querySelector('[data-id="auto"]');
+            if (defaultEl) selectTransition("auto", defaultEl);
+        }
+
+        function selectTransition(id, el) {
+            document.querySelectorAll(".trans-option").forEach(o => o.classList.remove("active"));
+            el.classList.add("active");
+            const pattern = _transitionPatterns.find(p => p.id === id);
+            document.getElementById("transition-desc").textContent = pattern ? pattern.description : "";
+        }
+
+        // ===== 高级设置 =====
+        function toggleAdvPanel() {
+            const toggle = document.querySelector(".adv-toggle");
+            const panel = document.getElementById("adv-panel");
+            toggle.classList.toggle("open");
+            panel.classList.toggle("open");
+            refreshCacheUsage();
+        }
+
+        // ===== 缓存占用 =====
+        async function refreshCacheUsage() {
+            const el = document.getElementById("cache-usage");
+            if (!el) return;
+            try {
+                const r = await fetch("/api/cache");
+                const d = await r.json();
+                const warn = d.over_limit || d.low_disk;
+                el.textContent = `已用 ${d.total_gb} GB / 上限 ${d.limit_gb} GB · C盘剩余 ${d.disk_free_gb} GB` +
+                    (d.active_task ? " · 有任务运行中" : "") +
+                    (d.stale_count ? ` · ${d.stale_count} 个中断任务待归档` : "") +
+                    (d.recycle_gb ? ` · 回收站还占 ${d.recycle_gb} GB` : "");
+                el.style.color = warn ? "#c0392b" : "#2e7d32";
+                el.style.fontWeight = warn ? "700" : "400";
+            } catch (e) {
+                el.textContent = "缓存状态读取失败";
+            }
+        }
+
+        async function cleanupCache() {
+            const btn = document.getElementById("cache-cleanup-btn");
+            const msg = document.getElementById("cache-msg");
+            if (btn) btn.disabled = true;
+            if (msg) msg.textContent = "正在扫描并清理旧的中间文件…";
+            try {
+                const fd = new FormData();
+                fd.append("dry_run", "false");
+                fd.append("force", "true");
+                const r = await fetch("/api/cache/cleanup", { method: "POST", body: fd });
+                const d = await r.json();
+                const reaped = (d.reaped && d.reaped.count) || 0;
+                const recycled = (d.recycle && d.recycle.freed_gb) || 0;
+                let prefix = "";
+                if (reaped) prefix += `已归档 ${reaped} 个中断任务；`;
+                if (recycled) prefix += `回收站释放 ${recycled} GB；`;
+                if (d.action === "noop") {
+                    if (msg) msg.textContent = prefix + (d.reason || "当前无需清理");
+                } else {
+                    if (msg) msg.textContent = prefix + `已清理 ${d.deleted_count} 个文件，释放 ${d.freed_gb} GB` +
+                        `（现在 ${d.after.total_gb} GB，C盘剩余 ${d.after.disk_free_gb} GB）`;
+                }
+            } catch (e) {
+                if (msg) msg.textContent = "清理失败：" + e;
+            } finally {
+                if (btn) btn.disabled = false;
+                refreshCacheUsage();
+            }
+        }
+
+        // 输出比例
+        function selectRatio(el) {
+            document.querySelectorAll(".ratio-option").forEach(o => o.classList.remove("active"));
+            el.classList.add("active");
+        }
+
+        // 字幕比例选了具体画幅时，顺带把「输出比例」切过去：
+        // 选一次就直接生成对应画幅的成片 + 按该画幅排版的字幕。
+        function onSubtitleAspectChange() {
+            const v = document.getElementById("subtitle-aspect").value;
+            const map = { "16:9": "16/9", "9:16": "9/16", "1:1": "1/1", "4:5": "4/5" };
+            const target = map[v];
+            if (!target) return;
+            const el = document.querySelector('.ratio-option[data-ratio="' + target + '"]');
+            if (el) selectRatio(el);
+        }
+
+        // 色彩分级
+        function selectGrade(el) {
+            document.querySelectorAll(".grade-option").forEach(o => o.classList.remove("active"));
+            el.classList.add("active");
+        }
+
+        // 字幕开关
+        function toggleSubtitleOptions() {
+            const on = document.getElementById("enable-subtitles").checked;
+            document.getElementById("subtitle-options").style.display = on ? "block" : "none";
+            if (on) {
+                updateSubtitleHint();
+                toggleLyricBox();
+            }
+        }
+
+        // 不同字幕样式的注意事项（竖排样式不吃"位置"参数）
+        const SUBTITLE_HINTS = {
+            jianghu: "江湖风：右侧竖排、行楷金字，字幕按字数自动缩放；「位置」对它不起作用，字数越多列越长。",
+            ink: "水墨古风：隶书米白、贴底居中，适合国风 / 纪录片。",
+            handwrite: "手写便签：舒体手写字，压在上方，适合 vlog、日常。",
+            epic: "片名史诗：中宋米金、居中大字，一句字幕占一屏，建议配合较慢的剪辑节奏。",
+            neon: "霓虹：青色外发光 + 冷白字芯，深色画面最出效果。",
+            extrude: "立体投影：白字 + 红色偏移投影，复古标语感。",
+            variety: "综艺字幕条：亮黄色块 + 黑字，适合综艺 / 解说。",
+            karaoke: "卡拉OK：逐字高亮，需要 Whisper 词级时间戳（转录会稍慢）。",
+        };
+
+        const BILINGUAL_HINT = "双语模式：原文在上、译文在下，字体和配色会跟随所选样式；"
+            + "位置固定底部（字号/颜色仍生效）。翻译后端不可用时，译文会与原文相同并给出告警。"
+            + "只想要一种语言就把「字幕语言」切成单语。";
+
+        function subtitleModeValue() {
+            const el = document.getElementById("subtitle-mode");
+            const v = el ? el.value : "mono";
+            if (v && v.indexOf("bilingual") === 0) {
+                return { mode: "bilingual", target: v.split(":")[1] || "" };
+            }
+            return { mode: "mono", target: "" };
+        }
+
+        // 字幕来源切到「语音识别」时收起歌词框；其余情况都让用户能填歌词
+        function toggleLyricBox() {
+            const src = document.getElementById("subtitle-source").value;
+            const box = document.getElementById("lyric-box");
+            if (!box) return;
+            box.style.display = src === "asr" ? "none" : "block";
+        }
+
+        function updateSubtitleHint() {
+            const el = document.getElementById("subtitle-hint");
+            const style = document.getElementById("subtitle-style").value;
+            const { mode } = subtitleModeValue();
+            let tip = SUBTITLE_HINTS[style];
+            if (mode === "bilingual") {
+                tip = BILINGUAL_HINT;
+                if (style === "jianghu") tip += "（竖排样式在双语下会改成横排双行）";
+            }
+            if (tip) {
+                el.textContent = tip;
+                el.style.display = "block";
+            } else {
+                el.style.display = "none";
+            }
+        }
+
+        // 增强 chips
+        function toggleChip(el) {
+            el.classList.toggle("active");
+        }
+
+        // 收集高级设置数据
+        function getAdvancedSettings() {
+            // 转场模板 + 转场细项
+            const transEl = document.querySelector(".trans-option.active");
+            const transitionPattern = transEl ? transEl.dataset.id : "auto";
+            const transitionLength = (document.getElementById("transition-length")?.value || "0.40");
+            const transitionDensity = (document.getElementById("transition-density")?.value || "0.60");
+            const transitionFlash = (document.getElementById("transition-flash")?.value || "auto");
+
+            // 输出比例
+            const ratioEl = document.querySelector(".ratio-option.active");
+            const aspectRatio = ratioEl ? ratioEl.dataset.ratio : "16/9";
+
+            // 字幕
+            const enableSubtitles = document.getElementById("enable-subtitles").checked;
+            const subtitleStyle = document.getElementById("subtitle-style").value;
+            const subtitleLang = document.getElementById("subtitle-lang").value;
+            const { mode: subtitleMode, target: translateLang } = subtitleModeValue();
+            // 字幕文字来源 + 歌词（唱词场景靠歌词，别指望语音识别）
+            const subtitleSource = document.getElementById("subtitle-source").value;
+            const lyricText = (document.getElementById("lyric-text").value || "").trim();
+            const lyricOffset = (document.getElementById("lyric-offset").value || "").trim();
+            const lyricRepeat = document.getElementById("lyric-repeat").value;
+            const djMode = (document.getElementById("dj-mode")?.value || "auto");
+            const djRatio = (document.getElementById("dj-ratio")?.value || "").trim();
+            const bgmFadeOut = document.getElementById("bgm-fade-out").value;
+
+            // 色彩分级
+            const gradeEl = document.querySelector(".grade-option.active");
+            const colorGrade = gradeEl ? gradeEl.dataset.grade : "none";
+
+            // 开关
+            const enableDucking = document.getElementById("enable-ducking").checked;
+            const enableHarmonize = document.getElementById("enable-harmonize").checked;
+            const enableSfx = document.getElementById("enable-sfx").checked;
+            const shotDensity = document.getElementById("shot-density").value;
+            const targetDuration = document.getElementById("target-duration").value;
+            const detectThreshold = document.getElementById("detect-threshold").value;
+            const muteSource = document.getElementById("mute-source").checked;
+            const cleanBlack = document.getElementById("clean-black").checked;
+            const effectPrompt = document.getElementById("effect-prompt").value;
+
+            // 增强
+            const enhanceChips = document.querySelectorAll(".chip.active");
+            const enhanceOptions = Array.from(enhanceChips).map(c => c.dataset.enhance);
+
+            // 字幕微调（字号/颜色/位置）
+            const subtitleSize = document.getElementById("subtitle-size").value;
+            const subtitleColor = document.getElementById("subtitle-color").value;
+            const subtitlePosition = document.getElementById("subtitle-position").value;
+            const subtitleAspect = document.getElementById("subtitle-aspect").value;
+            const subtitleFit = document.getElementById("subtitle-fit").value;
+
+            // 防抖：auto 跟随风格模板
+            const stabilizeMode = document.getElementById("stabilize-mode").value;
+
+            // 输出画质（auto = 跟随素材分辨率）
+            const renderQuality = document.getElementById("render-quality").value;
+
+            return { transitionPattern, transitionLength, transitionDensity, transitionFlash, aspectRatio, enableSubtitles, subtitleStyle, subtitleLang, subtitleMode, translateLang, subtitleSource, lyricText, lyricOffset, lyricRepeat, djMode, djRatio, bgmFadeOut, colorGrade, enableDucking, enableHarmonize, enableSfx, shotDensity, targetDuration, detectThreshold, muteSource, cleanBlack, effectPrompt, enhanceOptions, subtitleSize, subtitleColor, subtitlePosition, subtitleAspect, subtitleFit, stabilizeMode, renderQuality };
+        }
+
+        // ===== 上传 & 提交 =====
+        async function uploadFiles(files) {
+            const formData = new FormData();
+            for (const f of files) formData.append("files", f);
+            const resp = await fetch("/api/upload/video", { method: "POST", body: formData });
+            const data = await resp.json();
+            return data.files;
+        }
+
+        async function uploadBgm(file) {
+            const formData = new FormData();
+            formData.append("file", file);
+            const resp = await fetch("/api/upload/bgm", { method: "POST", body: formData });
+            const data = await resp.json();
+            return data.path;
+        }
+
+        async function uploadNarration(file) {
+            const formData = new FormData();
+            formData.append("file", file);
+            const resp = await fetch("/api/upload/narration", { method: "POST", body: formData });
+            const data = await resp.json();
+            return data.path;
+        }
+
+        // ===== 进度步骤管理 =====
+        let _elapsedTimer = null;
+        let _elapsedStart = 0;
+        let _currentEvtSource = null;
+
+        function resetProgressSteps() {
+            ["step-bgm", "step-search", "step-analyze", "step-render", "step-post"].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove("active", "done");
+            });
+        }
+
+        function setStepActive(stepId) {
+            const el = document.getElementById(stepId);
+            if (el) { el.classList.add("active"); el.classList.remove("done"); }
+        }
+
+        function setStepDone(stepId) {
+            const el = document.getElementById(stepId);
+            if (el) { el.classList.remove("active"); el.classList.add("done"); }
+        }
+
+        function updateStepsByProgress(progress, message) {
+            const msg = message || "";
+            // BGM 阶段: 0-8
+            if (progress <= 8) {
+                if (progress >= 8) { setStepDone("step-bgm"); } else { setStepActive("step-bgm"); }
+                setStepActive("step-bgm");
+            } else {
+                setStepDone("step-bgm");
+            }
+            // 搜索素材阶段: 10-25
+            if (progress > 8 && progress <= 25) {
+                setStepActive("step-search");
+            } else if (progress > 25) {
+                setStepDone("step-search");
+            }
+            // 分析阶段: 30-50
+            if (progress > 25 && progress <= 50) {
+                setStepActive("step-analyze");
+            } else if (progress > 50) {
+                setStepDone("step-analyze");
+            }
+            // 渲染阶段: 50-80
+            if (progress > 50 && progress <= 80) {
+                setStepActive("step-render");
+            } else if (progress > 80) {
+                setStepDone("step-render");
+            }
+            // 后处理阶段: 85-100
+            if (progress > 80) {
+                setStepActive("step-post");
+            }
+        }
+
+        function startElapsedTimer() {
+            _elapsedStart = Date.now();
+            const el = document.getElementById("progress-elapsed");
+            _elapsedTimer = setInterval(() => {
+                const sec = Math.floor((Date.now() - _elapsedStart) / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                el.textContent = `已用时 ${m}:${String(s).padStart(2, "0")}`;
+            }, 1000);
+        }
+
+        function stopElapsedTimer() {
+            if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+        }
+
+        // ===== 提交任务 =====
+        async function submitTask() {
+            // 搜索模式强制走“先搜素材 → 挑选确认”两步，避免直接开跑
+            if (sourceMode === "search") {
+                if (!materialCandidates.length) {
+                    showToast("请先点“① 搜索素材并挑选”");
+                    document.getElementById("search-materials-btn")
+                        .scrollIntoView({ behavior: "smooth", block: "center" });
+                    return;
+                }
+                if (!materialsConfirmed) {
+                    showToast("请先挑选并点“② 确认素材，继续设置”");
+                    document.getElementById("material-section")
+                        .scrollIntoView({ behavior: "smooth", block: "start" });
+                    return;
+                }
+            }
+
+            const btn = document.getElementById("submit-btn");
+            btn.disabled = true;
+            btn.textContent = "处理中...";
+
+            // 立即显示进度区域
+            const progressSection = document.getElementById("progress-section");
+            const resultSection = document.getElementById("result-section");
+            resultSection.classList.remove("active");
+            progressSection.classList.add("active");
+            resetProgressSteps();
+            document.getElementById("progress-fill").style.width = "0%";
+            document.getElementById("progress-msg").textContent = "正在提交任务...";
+            document.getElementById("progress-elapsed").textContent = "";
+            startElapsedTimer();
+
+            try {
+                let videoPaths, bgmPath;
+
+                // BGM
+                if (bgmMode === "upload") {
+                    const bgmFile = document.getElementById("bgm-file").files[0];
+                    if (!bgmFile) {
+                        shake(document.getElementById("bgm-upload-section"));
+                        showToast("请选择 BGM 文件");
+                        btn.disabled = false; btn.textContent = "③ 开始混剪";
+                        stopElapsedTimer(); return;
+                    }
+                    bgmPath = await uploadBgm(bgmFile);
+                }
+
+                // 视频来源
+                if (sourceMode === "upload") {
+                    const videoFiles = document.getElementById("video-files").files;
+                    if (videoFiles.length === 0) {
+                        // 没选文件时，允许用「候选素材」（直链导入/追加本地）继续
+                        if (!materialCandidates.length) {
+                            shake(document.getElementById("upload-section"));
+                            showToast("请选择视频文件，或用上面的「导入链接」");
+                            btn.disabled = false; btn.textContent = "③ 开始混剪";
+                            stopElapsedTimer(); return;
+                        }
+                    } else {
+                        videoPaths = await uploadFiles(videoFiles);
+                    }
+                }
+
+                const style = document.getElementById("style-value").value;
+                const stylePreset = document.getElementById("style-preset-value").value;
+                const selectedSources = getSelectedSources();
+
+                // 候选素材模式：用户已经挑选过（搜索/直链导入/追加本地），
+                // 直接用选中的本地路径，不再重新爬取。上传 tab 已选文件时优先用文件。
+                if (materialCandidates.length && !(videoPaths && videoPaths.length)) {
+                    const selectedMaterials = materialCandidates.filter(m => m.selected);
+                    if (!selectedMaterials.length) {
+                        showToast("请至少勾选一个候选素材");
+                        btn.disabled = false; btn.textContent = "③ 开始混剪";
+                        stopElapsedTimer(); return;
+                    }
+                    videoPaths = selectedMaterials.map(m => m.path);
+                }
+
+                const formData = new FormData();
+                formData.append("video_paths", JSON.stringify(videoPaths || []));
+                formData.append("style", style);
+                if (stylePreset) formData.append("style_preset", stylePreset);
+
+                // BGM：上传文件或搜索关键词
+                if (bgmMode === "upload") {
+                    formData.append("bgm_path", bgmPath);
+                } else {
+                    const bgmQuery = document.getElementById("bgm-query");
+                    if (!bgmQuery.value.trim()) {
+                        shake(bgmQuery);
+                        showToast("请输入 BGM 搜索关键词");
+                        btn.disabled = false; btn.textContent = "③ 开始混剪";
+                        stopElapsedTimer(); return;
+                    }
+                    formData.append("bgm_query", bgmQuery.value);
+                }
+
+                if (sourceMode === "search" && !(videoPaths && videoPaths.length)) {
+                    const query = document.getElementById("search-query");
+                    if (!query.value.trim()) {
+                        shake(query);
+                        showToast("请输入搜索关键词");
+                        btn.disabled = false; btn.textContent = "③ 开始混剪";
+                        stopElapsedTimer(); return;
+                    }
+                    if (selectedSources.length === 0) {
+                        shake(document.querySelector(".source-toggle"));
+                        showToast("请至少选择一个素材来源");
+                        btn.disabled = false; btn.textContent = "③ 开始混剪";
+                        stopElapsedTimer(); return;
+                    }
+                    const queryText = query.value.trim();
+                    const sourceList = buildSourceList(queryText);
+
+                    formData.append("query", queryText);
+                    formData.append("source", sourceList[0]);
+                    formData.append("sources", JSON.stringify(sourceList));
+                    formData.append("clip_limit", document.getElementById("clip-limit").value);
+                }
+
+                // 高级设置
+                const adv = getAdvancedSettings();
+                formData.append("transition_pattern", adv.transitionPattern);
+                formData.append("transition_length", adv.transitionLength || "0.40");
+                formData.append("transition_density", adv.transitionDensity || "0.60");
+                formData.append("transition_flash", adv.transitionFlash || "auto");
+                formData.append("aspect_ratio", adv.aspectRatio);
+                // 填了歌词就算"要字幕"（后端同样会自动开启，这里保持一致）
+                const wantSubs = adv.enableSubtitles || !!adv.lyricText;
+                formData.append("enable_subtitles", wantSubs ? "true" : "false");
+                if (wantSubs) {
+                    formData.append("subtitle_style", adv.subtitleStyle);
+                    formData.append("subtitle_lang", adv.subtitleLang);
+                    formData.append("subtitle_mode", adv.subtitleMode || "mono");
+                    formData.append("translate_lang", adv.translateLang || "");
+                    formData.append("subtitle_source", adv.subtitleSource || "auto");
+                    formData.append("lyric_text", adv.lyricText || "");
+                    formData.append("lyric_offset", adv.lyricOffset || "");
+                    formData.append("lyric_repeat", adv.lyricRepeat || "auto");
+                    formData.append("dj_mode", adv.djMode || "auto");
+                    formData.append("dj_ratio", adv.djRatio || "");
+                }
+                formData.append("bgm_fade_out", adv.bgmFadeOut || "auto");
+                formData.append("color_grade", adv.colorGrade);
+                formData.append("enable_ducking", adv.enableDucking ? "true" : "false");
+                formData.append("enable_harmonize", adv.enableHarmonize ? "true" : "false");
+                formData.append("enable_sfx", adv.enableSfx ? "true" : "false");
+                formData.append("enable_stabilize", adv.stabilizeMode || "auto");
+                formData.append("shot_density", adv.shotDensity);
+                formData.append("target_duration", adv.targetDuration);
+                formData.append("detect_threshold", adv.detectThreshold);
+                formData.append("mute_source", adv.muteSource ? "true" : "false");
+                formData.append("clean_black", adv.cleanBlack ? "true" : "false");
+                formData.append("prompt", adv.effectPrompt);
+                formData.append("enhance_options", JSON.stringify(adv.enhanceOptions));
+                formData.append("render_quality", adv.renderQuality || "auto");
+
+                // 字幕微调参数（仅开启字幕时有意义）
+                if (wantSubs) {
+                    formData.append("subtitle_size", adv.subtitleSize || "0");
+                    formData.append("subtitle_color", adv.subtitleColor || "");
+                    formData.append("subtitle_position", adv.subtitlePosition || "auto");
+                    formData.append("subtitle_aspect", adv.subtitleAspect || "auto");
+                    formData.append("subtitle_fit", adv.subtitleFit || "auto");
+                }
+
+                // 配音旁白（可选）
+                const narrFile = document.getElementById("narration-file").files[0];
+                if (narrFile) {
+                    document.getElementById("progress-msg").textContent = "正在上传配音旁白...";
+                    const narrationPath = await uploadNarration(narrFile);
+                    if (narrationPath) formData.append("narration_path", narrationPath);
+                }
+
+                // 带超时的 fetch（60秒）
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                const resp = await fetch("/api/montage", { method: "POST", body: formData, signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!resp.ok) {
+                    throw new Error(`服务器返回错误 (${resp.status})`);
+                }
+
+                const data = await resp.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                listenProgress(data.task_id);
+                loadTasks();
+                pollTasksUntilSettled();
+
+            } catch (e) {
+                stopElapsedTimer();
+                if (e.name === "AbortError") {
+                    showToast("提交超时，请检查服务器是否正常运行");
+                    document.getElementById("progress-msg").textContent = "提交超时，请重试";
+                } else {
+                    showToast("出错了: " + e.message);
+                    document.getElementById("progress-msg").textContent = "出错: " + e.message;
+                }
+                btn.disabled = false;
+                btn.textContent = "③ 开始混剪";
+            }
+        }
+
+        function listenProgress(taskId) {
+            if (_currentEvtSource) { _currentEvtSource.close(); }
+            const evtSource = new EventSource(`/api/task/${taskId}/progress`);
+            _currentEvtSource = evtSource;
+
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            evtSource.onmessage = (e) => {
+                retryCount = 0; // 收到消息就重置重试计数
+                const data = JSON.parse(e.data);
+                const progress = data.progress || 0;
+                const message = data.message || "";
+
+                document.getElementById("progress-fill").style.width = progress + "%";
+                document.getElementById("progress-msg").textContent = message;
+                updateStepsByProgress(progress, message);
+
+                if (data.status === "done") {
+                    evtSource.close();
+                    _currentEvtSource = null;
+                    stopElapsedTimer();
+                    setStepDone("step-post");
+                    document.getElementById("result-section").classList.add("active");
+                    document.getElementById("download-link").href = `/api/download/${taskId}`;
+                    document.getElementById("submit-btn").disabled = false;
+                    document.getElementById("submit-btn").textContent = "③ 开始混剪";
+                    renderWarnings(data.warnings);
+                    loadTasks();
+                    if (data.warnings && data.warnings.length) {
+                        showToast(`混剪完成，但有 ${data.warnings.length} 处没完全生效`);
+                    } else {
+                        showToast("混剪完成! 🎉");
+                    }
+                    loadProxyVideo(taskId);
+                } else if (data.status === "error") {
+                    evtSource.close();
+                    _currentEvtSource = null;
+                    stopElapsedTimer();
+                    showToast("❌ " + (data.message || "混剪失败"));
+                    document.getElementById("submit-btn").disabled = false;
+                    document.getElementById("submit-btn").textContent = "③ 开始混剪";
+                    loadTasks();
+                }
+            };
+
+            evtSource.onerror = () => {
+                evtSource.close();
+                _currentEvtSource = null;
+                // SSE 断开时如果还没收到完成/错误状态，提示用户
+                stopElapsedTimer();
+                const fill = document.getElementById("progress-fill");
+                const currentProgress = parseFloat(fill.style.width) || 0;
+                if (currentProgress < 100) {
+                    showToast("连接中断，请刷新页面重试");
+                    document.getElementById("progress-msg").textContent = "⚠️ 进度连接中断";
+                    document.getElementById("submit-btn").disabled = false;
+                    document.getElementById("submit-btn").textContent = "③ 开始混剪";
+                }
+            };
+        }
+
+        // ===== 预览：低码率代理 + 参数预览 =====
+        let _currentTaskId = null;
+
+        function loadProxyVideo(taskId) {
+            _currentTaskId = taskId;
+            const v = document.getElementById("proxy-video");
+            const st = document.getElementById("preview-status");
+            // 预览用 1280 宽 / CRF 24：早先的 640 宽 + CRF30 糊得没法判断画质，
+            // 用户会误以为成片也这么差。文件大一点，但只影响首帧等待。
+            v.src = `/api/task/${taskId}/proxy/video?width=1280&crf=24`;
+            v.load();
+            st.textContent = "";
+            document.getElementById("preview-box").style.display = "none";
+            const raw = document.getElementById("raw-link");
+            if (raw) raw.href = `/api/download/${taskId}?inline=1`;
+            refreshOutputMeta(taskId);
+        }
+
+        // 显示成片真实分辨率 / 体积，避免被压缩预览误导
+        async function refreshOutputMeta(taskId) {
+            const el = document.getElementById("output-meta");
+            if (!el) return;
+            try {
+                const resp = await fetch(`/api/task/${taskId}`);
+                const t = await resp.json();
+                const m = t.output_meta;
+                if (m && m.width) {
+                    const mb = m.size ? ` · ${(m.size / 1048576).toFixed(1)} MB` : "";
+                    el.textContent = `成片: ${m.width}×${m.height}${mb}`;
+                } else {
+                    el.textContent = "";
+                }
+            } catch (e) {
+                el.textContent = "";
+            }
+        }
+
+        async function requestParamPreview() {
+            if (!_currentTaskId) { showToast("请先完成一次混剪"); return; }
+            const st = document.getElementById("preview-status");
+            const btn = document.getElementById("btn-preview");
+            btn.disabled = true;
+            st.textContent = "正在渲染预览（低码率短片段）...";
+
+            const adv = getAdvancedSettings();
+            const fd = new FormData();
+            fd.append("start", "0");
+            fd.append("duration", "6");
+            fd.append("color_grade", adv.colorGrade || "none");
+            fd.append("subtitle_style", adv.enableSubtitles ? adv.subtitleStyle : "none");
+            fd.append("width", "960");
+            fd.append("crf", "26");
+
+            try {
+                const resp = await fetch(`/api/task/${_currentTaskId}/preview`, { method: "POST", body: fd });
+                const data = await resp.json();
+                if (data.error) { st.textContent = "预览失败: " + data.error; return; }
+                const box = document.getElementById("preview-box");
+                const pv = document.getElementById("preview-video");
+                pv.src = data.url + "?t=" + Date.now();
+                pv.load();
+                box.style.display = "block";
+                st.textContent = data.cached ? "已用缓存（0ms）" : `生成耗时 ${data.build_ms}ms`;
+                document.getElementById("preview-meta").textContent =
+                    `${data.width}x${data.height} · ${data.duration}s · ${data.kbps}kbps · 调色:${adv.colorGrade || "none"}`;
+            } catch (e) {
+                st.textContent = "预览请求失败: " + e;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById("btn-preview").addEventListener("click", requestParamPreview);
+
+        // ===== 结果告警（字幕/增强/防抖等失败不再静默） =====
+        function renderWarnings(list) {
+            const box = document.getElementById("result-warnings");
+            if (!list || !list.length) {
+                box.style.display = "none";
+                box.innerHTML = "";
+                return;
+            }
+            box.style.display = "block";
+            box.innerHTML = `<div style="font-weight:900;margin-bottom:6px;">⚠️ 有 ${list.length} 处没完全生效：</div>`
+                + list.map(w => `<div style="margin:3px 0;">· ${escapeHtml(w)}</div>`).join("");
+        }
+
+        // ===== 任务历史（列表 / 下载 / 重试 / 取消） =====
+        let _taskTimer = null;
+
+        async function loadTasks() {
+            const tbody = document.getElementById("history-tbody");
+            const empty = document.getElementById("history-empty");
+            const status = document.getElementById("history-status");
+            if (!tbody) return;
+            try {
+                const resp = await fetch(`/api/tasks?limit=20`);
+                const data = await resp.json();
+                const tasks = data.tasks || [];
+                if (!tasks.length) {
+                    tbody.innerHTML = "";
+                    if (empty) empty.style.display = "block";
+                    if (status) status.textContent = "";
+                    return;
+                }
+                if (empty) empty.style.display = "none";
+                const stats = data.stats || {};
+                const total = Object.values(stats).reduce((a, b) => a + (Number(b) || 0), 0);
+                if (status) {
+                    status.textContent = `共 ${total || tasks.length} 个任务`
+                        + (stats.running ? `，进行中 ${stats.running}` : "");
+                }
+                const stCls = (st) => st === "done" ? "badge-ok"
+                    : st === "error" ? "badge-recommend"
+                    : st === "canceled" ? "badge-unavailable" : "badge-limited";
+                tbody.innerHTML = tasks.map(t => {
+                    const when = String(t.created_at || "").replace("T", " ").slice(5, 16);
+                    const kind = t.kind === "materials" ? "搜素材" : "混剪";
+                    const done = t.status === "done" && t.output_path;
+                    const ops = [];
+                    if (done) ops.push(`<a href="/api/download/${t.id}" style="font-weight:700;font-size:12px;color:#FB7299;">下载</a>`);
+                    if (t.status === "error" || t.status === "canceled") {
+                        ops.push(`<button class="material-del" onclick="retryTask('${t.id}')">重试</button>`);
+                    }
+                    if (t.status === "pending" || t.status === "queued") {
+                        ops.push(`<button class="material-del" onclick="cancelTask('${t.id}')">取消</button>`);
+                    }
+                    if (!ops.length) ops.push(`<span style="font-size:12px;color:#999;">${escapeHtml((t.message || "").slice(0, 18))}</span>`);
+                    return `<tr>
+                        <td style="font-size:12px;color:#666;">${escapeHtml(when)}</td>
+                        <td style="font-size:12px;">${kind}</td>
+                        <td><span class="badge ${stCls(t.status)}">${escapeHtml(t.status)}</span></td>
+                        <td style="font-size:12px;">${Math.round(Number(t.progress) || 0)}%</td>
+                        <td><div style="display:flex;gap:8px;align-items:center;">${ops.join("")}</div></td>
+                    </tr>`;
+                }).join("");
+            } catch (e) {
+                if (status) status.textContent = "读取任务列表失败: " + e.message;
+            }
+        }
+
+        async function retryTask(id) {
+            try {
+                const r = await (await fetch(`/api/task/${id}/retry`, { method: "POST" })).json();
+                if (r.error) { showToast(r.error); return; }
+                showToast("已重新排队，进度会自动刷新");
+                loadTasks();
+                pollTasksUntilSettled();
+            } catch (e) { showToast("重试失败: " + e.message); }
+        }
+
+        async function cancelTask(id) {
+            try {
+                const r = await (await fetch(`/api/task/${id}/cancel`, { method: "POST" })).json();
+                if (r.error) { showToast(r.error); return; }
+                showToast("已取消");
+                loadTasks();
+            } catch (e) { showToast("取消失败: " + e.message); }
+        }
+
+        // 提交/重试后短轮询刷新列表，用户不用手动点"刷新"
+        function pollTasksUntilSettled() {
+            if (_taskTimer) clearInterval(_taskTimer);
+            let n = 0;
+            _taskTimer = setInterval(() => {
+                n += 1;
+                loadTasks();
+                if (n >= 40) { clearInterval(_taskTimer); _taskTimer = null; }
+            }, 3000);
+        }
+
+        // ===== 科技风主题（默认深色控制台，可切浅色科技）=====
+        function toggleTechTheme() {
+            const light = document.body.classList.toggle("theme-light");
+            try { localStorage.setItem("montage_theme", light ? "light" : "dark"); } catch (e) {}
+            const btn = document.getElementById("theme-btn");
+            if (btn) btn.textContent = light ? "◐ 深色科技" : "◐ 浅色科技";
+        }
+        (function initTechTheme() {
+            let light = false;
+            try { light = localStorage.getItem("montage_theme") === "light"; } catch (e) {}
+            if (light) {
+                document.body.classList.add("theme-light");
+                const btn = document.getElementById("theme-btn");
+                if (btn) btn.textContent = "◐ 深色科技";
+            }
+            const clock = document.getElementById("sys-clock");
+            if (clock) {
+                const tick = () => {
+                    clock.textContent = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+                };
+                tick();
+                setInterval(tick, 1000);
+            }
+        })();
+
+        // 初始化
+        renderSourceTable();
+        loadStylePresets();
+        loadTransitionPatterns();
+        loadTasks();
+        refreshCacheUsage();
+    </script>
+</body>
+</html>
